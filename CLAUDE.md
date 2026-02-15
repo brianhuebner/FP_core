@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-FP_core is an **accounting knowledge graph** built on a domain-driven ontology. It models accounting concepts (accounts, transactions, entities, dimensions) as a graph with typed nodes and relationships, designed for Neo4j. The system enforces double-entry accounting semantics while allowing professional flexibility — it guides but doesn't block. It also models recipe/pipeline concepts for transforming source data into accounting entries. Currently implements Layers 1-3 only. No I/O layer, no Neo4j driver, no API.
+FP_core is an **accounting knowledge graph** built on a domain-driven ontology. It models accounting concepts (accounts, transactions, entities, dimensions) as a graph with typed nodes and relationships, designed for Neo4j. The system enforces double-entry accounting semantics while allowing professional flexibility — it guides but doesn't block. It also models recipe/pipeline concepts for transforming source data into accounting entries. Implements Layers 1-4: types, ontology/validation, pure logic, and Neo4j persistence.
 
 ## Branch
 
@@ -22,15 +22,21 @@ pytest tests/domain/test_ontology.py
 pytest tests/domain/test_types_recipe.py
 pytest tests/domain/test_ontology_recipe.py
 pytest tests/domain/test_logic.py
+pytest tests/persistence/test_merge_keys.py
+pytest tests/persistence/test_serializers.py
+pytest tests/persistence/test_deserializers.py
 
 # Run a specific test class or method
 pytest tests/domain/test_ontology.py::TestValidateTransactionBalance::test_balanced_transaction
+
+# Integration tests (requires NEO4J_URI, NEO4J_PASSWORD env vars)
+pytest tests/persistence/test_operations.py
 
 # Activate virtualenv
 source .venv/bin/activate
 ```
 
-Python 3.12, no build step, no linter configured. Only dependency beyond stdlib is pytest.
+Python 3.12, no build step, no linter configured. Dependencies beyond stdlib: pytest, neo4j>=5.0.
 
 ## File Map
 
@@ -42,6 +48,13 @@ domain/
   ontology.py          # Layer 2: core schema, constraints, validators (~500 lines)
   ontology_recipe.py   # Layer 2: recipe schema, constraints, validators (~686 lines)
   logic.py             # Layer 3: pure functions for recipe graph building (~277 lines)
+persistence/
+  __init__.py          # Public API — re-exports everything via __all__
+  merge_keys.py        # Layer 4: NodeLabel -> MERGE identity properties
+  serializers.py       # Layer 4: pure GraphPattern -> (cypher, params)
+  deserializers.py     # Layer 4: pure Neo4j records -> domain objects
+  connection.py        # Layer 4: Neo4jConnection wrapper (only neo4j import)
+  operations.py        # Layer 4: save/load/delete/verify pattern
 tests/
   domain/
     test_types.py          # Layer 1 core type tests (~160 lines)
@@ -49,6 +62,12 @@ tests/
     test_ontology.py       # Layer 2 core ontology tests (~649 lines)
     test_ontology_recipe.py # Layer 2 recipe ontology tests (~643 lines)
     test_logic.py          # Layer 3 logic tests (~740 lines)
+  persistence/
+    conftest.py            # Neo4j fixtures + skip markers
+    test_merge_keys.py     # Merge key registry tests
+    test_serializers.py    # Cypher generation tests (pure, no driver)
+    test_deserializers.py  # Record->domain conversion tests (pure, no driver)
+    test_operations.py     # Integration tests (skipped without NEO4J_URI)
 docs/ontology.md       # Design doc: full ontology rationale (~453 lines)
 main.py                # Placeholder entry point (~16 lines)
 ```
@@ -61,7 +80,9 @@ main.py                # Placeholder entry point (~16 lines)
 
 **Layer 3 — Logic** (`logic.py`): Pure functions (no I/O) for building and validating recipe graph patterns: `build_source_schema_pattern`, `build_recipe_pattern`, `validate_recipe`, `extract_measures_for_schema`, `extract_debit_credit_slots`, `build_output_format_pattern`, `extract_output_columns`, `extract_validation_rules`, `extract_batch_format`, `validate_output_format`, `compose_pipeline_pattern`, `validate_pipeline_connectivity`.
 
-**Public API** (`domain/__init__.py`): Re-exports everything from all layers via `__all__`. Import from `domain` directly.
+**Layer 4 — Persistence** (`persistence/`): Neo4j I/O layer. `domain/` stays pure — zero I/O imports. `merge_keys.py` maps NodeLabel to MERGE identity properties. `serializers.py` and `deserializers.py` are pure functions (testable without Neo4j). Only `connection.py` imports the `neo4j` driver. `operations.py` composes serializers + connection for save/load/delete. Uses MERGE for idempotent writes. `Node.id` round-trips via a `_node_id` property stored in Neo4j.
+
+**Public API** (`domain/__init__.py`): Re-exports everything from all layers via `__all__`. Import from `domain` directly. Persistence has its own package: import from `persistence`.
 
 ### Canonical Counts
 
@@ -78,7 +99,8 @@ These are test-asserted — do not change without updating both code and tests:
 | `RECIPE_RELATIONSHIP_CONSTRAINTS` | 14 | Recipe allowed edges (all resolved) |
 | `merged_relationship_constraints()` | 25 | All constraints combined |
 | `ACCOUNT_TYPE_BALANCE_MAP` | 7 | Account type → normal balance direction |
-| Total tests | 197 | Across 5 test files |
+| `MERGE_KEYS`                       | 19  | One per NodeLabel                              |
+| Total tests                        | 197 | Across 5 domain test files (+ persistence)     |
 
 ## Key Design Constraints
 
