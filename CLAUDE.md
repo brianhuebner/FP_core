@@ -83,6 +83,12 @@ mcp_server/
 docs/ontology.md       # Design doc: full ontology rationale (~453 lines)
 docs/fp_core_skill.md  # MCP-driven skill: guided workflows for AI agents using MCP tools
 docs/outline_skill.md  # Tier 3 reference: Neo4j Cypher query patterns
+dogfood/
+  load_payroll.py        # Builds & saves payroll recipe pipeline to Neo4j
+  run_payroll.py         # Processes payroll data through recipe graph → journal CSV
+  sample_payroll_data.csv      # Sample input: 5 employees, one pay period
+  payroll_journal_export.csv   # Output from run_payroll.py
+  payroll_journal_output.csv   # Output from MCP-driven session
 main.py                # Placeholder entry point (~16 lines)
 ```
 

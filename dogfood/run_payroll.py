@@ -13,6 +13,10 @@ import csv
 import io
 import sys
 from decimal import Decimal
+from pathlib import Path
+
+# Allow running from dogfood/ — add project root to sys.path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from domain import (
     NodeLabel,
@@ -322,9 +326,10 @@ if fmt_node and out_cols_sorted:
     csv_content = output.getvalue()
     print(csv_content)
 
-    # Write to file
-    with open("payroll_journal_export.csv", "w", newline="") as f:
+    # Write to file (in the same directory as this script)
+    output_path = Path(__file__).resolve().parent / "payroll_journal_export.csv"
+    with open(output_path, "w", newline="") as f:
         f.write(csv_content)
-    print(f"Written to payroll_journal_export.csv")
+    print(f"Written to {output_path}")
 else:
     print("No output format found in graph — skipping CSV export.")
