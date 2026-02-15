@@ -45,7 +45,7 @@ tests/
     test_ontology.py       # Layer 2 core ontology tests (~649 lines)
     test_ontology_recipe.py # Layer 2 recipe ontology tests (~417 lines)
     test_logic.py          # Layer 3 logic tests (~369 lines)
-ontology.md            # Design doc: full ontology rationale (~453 lines)
+docs/ontology.md       # Design doc: full ontology rationale (~453 lines)
 main.py                # Placeholder entry point (~16 lines)
 ```
 
@@ -122,4 +122,4 @@ from domain.ontology import ONTOLOGY, PropertySchema
 
 ## Ontology Reference
 
-See `ontology.md` for the full design document including node type definitions, relationship semantics, validation strategy (hard blocks vs soft warnings vs no validation), traceability patterns, and implementation phases.
+See `docs/ontology.md` for the full design document including node type definitions, relationship semantics, validation strategy (hard blocks vs soft warnings vs no validation), traceability patterns, and implementation phases.

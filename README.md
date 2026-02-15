@@ -65,7 +65,8 @@ FP_core/
       test_ontology.py         Tests for core ontology and all core validators
       test_ontology_recipe.py  Tests for recipe ontology and recipe validators
       test_logic.py            Tests for Layer 3 logic functions
-  ontology.md            Design document with full ontology rationale
+  docs/
+    ontology.md          Design document with full ontology rationale
   main.py                Placeholder entry point
   CLAUDE.md              Claude Code development guide
 ```
@@ -109,5 +110,5 @@ No `pyproject.toml` or formal packaging yet. The only dependency beyond stdlib i
 
 ## Design Documents
 
-- **`ontology.md`** — Full design rationale including node type definitions, relationship semantics, validation strategy, traceability patterns, and implementation phases.
+- **`docs/ontology.md`** — Full design rationale including node type definitions, relationship semantics, validation strategy, traceability patterns, and implementation phases.
 - **`CLAUDE.md`** — Claude Code development guide with file map, architecture summary, canonical counts, and extension patterns.
