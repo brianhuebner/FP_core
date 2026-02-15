@@ -80,16 +80,17 @@ mcp_server/
   summarizers.py       # Layer 5: pure functions — GraphPattern → JSON-serializable dicts
   tools.py             # Layer 5: Tier 1 tool handlers (load_recipe, get_processing_instructions)
   resources.py         # Layer 5: resource handlers (ontology://merged, constraints://merged)
-docs/ontology.md       # Design doc: full ontology rationale (~453 lines)
-docs/fp_core_skill.md  # MCP-driven skill: guided workflows for AI agents using MCP tools
-docs/outline_skill.md  # Tier 3 reference: Neo4j Cypher query patterns
+docs/
+  fp_core_skill.md     # MCP-driven skill: guided workflows for AI agents using MCP tools
+  mcp_architecture.md  # MCP server architecture and design decisions
+  user_flow.md         # End-to-end user flow documentation
+  old/                 # Archived docs (ontology.md, outline_skill.md, etc.)
 dogfood/
   load_payroll.py        # Builds & saves payroll recipe pipeline to Neo4j
   run_payroll.py         # Processes payroll data through recipe graph → journal CSV
   sample_payroll_data.csv      # Sample input: 5 employees, one pay period
   payroll_journal_export.csv   # Output from run_payroll.py
   payroll_journal_output.csv   # Output from MCP-driven session
-main.py                # Placeholder entry point (~16 lines)
 ```
 
 ## Architecture
@@ -171,4 +172,4 @@ from domain.ontology import ONTOLOGY, PropertySchema
 
 ## Ontology Reference
 
-See `docs/ontology.md` for the full design document including node type definitions, relationship semantics, validation strategy (hard blocks vs soft warnings vs no validation), traceability patterns, and implementation phases.
+See `docs/old/ontology.md` for the full design document including node type definitions, relationship semantics, validation strategy (hard blocks vs soft warnings vs no validation), traceability patterns, and implementation phases.
