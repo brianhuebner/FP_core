@@ -81,6 +81,8 @@ mcp_server/
   tools.py             # Layer 5: Tier 1 tool handlers (load_recipe, get_processing_instructions)
   resources.py         # Layer 5: resource handlers (ontology://merged, constraints://merged)
 docs/ontology.md       # Design doc: full ontology rationale (~453 lines)
+docs/fp_core_skill.md  # MCP-driven skill: guided workflows for AI agents using MCP tools
+docs/outline_skill.md  # Tier 3 reference: Neo4j Cypher query patterns
 main.py                # Placeholder entry point (~16 lines)
 ```
 
