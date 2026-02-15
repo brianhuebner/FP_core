@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 FP_core is an **accounting knowledge graph** built on a domain-driven ontology. It models accounting concepts (accounts, transactions, entities, dimensions) as a graph with typed nodes and relationships, designed for Neo4j. The system enforces double-entry accounting semantics while allowing professional flexibility — it guides but doesn't block. It also models recipe/pipeline concepts for transforming source data into accounting entries. Currently implements Layers 1-3 only. No I/O layer, no Neo4j driver, no API.
 
+## Branch
+
+Main branch: `main`
+
 ## Commands
 
 ```bash
