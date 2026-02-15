@@ -219,6 +219,10 @@ Never modify posted transactions. To correct an error, create a reversal (equal 
 
 For full accounting semantics, see `docs/ontology.md`.
 
+### Naming conventions
+
+Node labels use **PascalCase** (`Account`, `TransactionLine`, `SourceSchema`) and relationship types use **UPPER_SNAKE_CASE** (`BELONGS_TO`, `HAS_RULE`, `MAPPED_TO`) — both per Neo4j recommendations. Property names use **snake_case** (`account_type`, `normal_balance`, `recipe_id`) — a deliberate divergence from Neo4j's `camelCase` recommendation, chosen for consistency with the Python codebase. This applies to all properties across core and recipe ontologies.
+
 ---
 
 ## 7. Anti-Patterns
