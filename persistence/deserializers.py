@@ -92,7 +92,8 @@ def deserialize_pattern(
         {"type": "HAS_COLUMN", "start_id": "...", "end_id": "...",
          "properties": {...}}
 
-    Deduplicates nodes by _node_id.
+    Deduplicates nodes by _node_id. Silently skips relationships with
+    unknown types (not in RelationshipType enum).
     """
     seen_ids: set[str] = set()
     nodes: List[Node] = []
@@ -110,8 +111,11 @@ def deserialize_pattern(
     seen_rel_ids: set[str] = set()
 
     for record in rel_records:
+        rel_type_str = record["type"]
+        if rel_type_str not in _REL_TYPE_MAP:
+            continue
         rel = deserialize_relationship(
-            rel_type=record["type"],
+            rel_type=rel_type_str,
             start_id=record["start_id"],
             end_id=record["end_id"],
             properties=record.get("properties", {}),
