@@ -6,9 +6,12 @@ import os
 import sys
 from typing import Dict, Optional
 
+from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 
 from domain.types import GraphPattern
+
+load_dotenv()
 
 # Configure logging to stderr (required for STDIO transport)
 logging.basicConfig(
