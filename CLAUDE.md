@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-FP_core is an **accounting knowledge graph** built on a domain-driven ontology. It models accounting concepts (accounts, transactions, entities, dimensions) as a graph with typed nodes and relationships, designed for Neo4j. The system enforces double-entry accounting semantics while allowing professional flexibility — it guides but doesn't block. It also models recipe/pipeline concepts for transforming source data into accounting entries. Implements Layers 1-4: types, ontology/validation, pure logic, and Neo4j persistence.
+FP_core is an **accounting knowledge graph** built on a domain-driven ontology. It models accounting concepts (accounts, transactions, entities, dimensions) as a graph with typed nodes and relationships, designed for Neo4j. The system enforces double-entry accounting semantics while allowing professional flexibility — it guides but doesn't block. It also models recipe/pipeline concepts for transforming source data into accounting entries. Implements Layers 1-5: types, ontology/validation, pure logic, Neo4j persistence, and MCP server.
 
 ## Branch
 
@@ -29,6 +29,9 @@ pytest tests/persistence/test_deserializers.py
 # Run a specific test class or method
 pytest tests/domain/test_ontology.py::TestValidateTransactionBalance::test_balanced_transaction
 
+# Layer 5 MCP server tests (pure, no Neo4j needed)
+pytest tests/mcp_server/test_summarizers.py
+
 # Integration tests (requires NEO4J_URI, NEO4J_PASSWORD env vars)
 pytest tests/persistence/test_operations.py
 
@@ -36,7 +39,7 @@ pytest tests/persistence/test_operations.py
 source .venv/bin/activate
 ```
 
-Python 3.12, no build step, no linter configured. Dependencies beyond stdlib: pytest, neo4j>=5.0.
+Python 3.12, no build step, no linter configured. Dependencies beyond stdlib: pytest, neo4j>=5.0, mcp[cli].
 
 ## File Map
 
@@ -68,7 +71,24 @@ tests/
     test_serializers.py    # Cypher generation tests (pure, no driver)
     test_deserializers.py  # Record->domain conversion tests (pure, no driver)
     test_operations.py     # Integration tests (skipped without NEO4J_URI)
+  mcp_server/
+    __init__.py            # Empty package marker
+    test_summarizers.py    # Layer 5 summarizer tests (pure, no Neo4j)
+mcp_server/
+  __init__.py          # Layer 5: FastMCP server instance, state, Neo4j connection
+  __main__.py          # Entry point: python -m mcp_server
+  summarizers.py       # Layer 5: pure functions — GraphPattern → JSON-serializable dicts
+  tools.py             # Layer 5: Tier 1 tool handlers (load_recipe, get_processing_instructions)
+  resources.py         # Layer 5: resource handlers (ontology://merged, constraints://merged)
 docs/ontology.md       # Design doc: full ontology rationale (~453 lines)
+docs/fp_core_skill.md  # MCP-driven skill: guided workflows for AI agents using MCP tools
+docs/outline_skill.md  # Tier 3 reference: Neo4j Cypher query patterns
+dogfood/
+  load_payroll.py        # Builds & saves payroll recipe pipeline to Neo4j
+  run_payroll.py         # Processes payroll data through recipe graph → journal CSV
+  sample_payroll_data.csv      # Sample input: 5 employees, one pay period
+  payroll_journal_export.csv   # Output from run_payroll.py
+  payroll_journal_output.csv   # Output from MCP-driven session
 main.py                # Placeholder entry point (~16 lines)
 ```
 
@@ -81,6 +101,8 @@ main.py                # Placeholder entry point (~16 lines)
 **Layer 3 — Logic** (`logic.py`): Pure functions (no I/O) for building and validating recipe graph patterns: `build_source_schema_pattern`, `build_recipe_pattern`, `validate_recipe`, `extract_measures_for_schema`, `extract_debit_credit_slots`, `build_output_format_pattern`, `extract_output_columns`, `extract_validation_rules`, `extract_batch_format`, `validate_output_format`, `compose_pipeline_pattern`, `validate_pipeline_connectivity`.
 
 **Layer 4 — Persistence** (`persistence/`): Neo4j I/O layer. `domain/` stays pure — zero I/O imports. `merge_keys.py` maps NodeLabel to MERGE identity properties. `serializers.py` and `deserializers.py` are pure functions (testable without Neo4j). Only `connection.py` imports the `neo4j` driver. `operations.py` composes serializers + connection for save/load/delete. Uses MERGE for idempotent writes. `Node.id` round-trips via a `_node_id` property stored in Neo4j.
+
+**Layer 5 — MCP Server** (`mcp_server/`): Model Context Protocol server exposing the knowledge graph to AI agents. `summarizers.py` contains pure functions that transform `GraphPattern` into JSON-serializable dicts — the bulk of new logic, fully testable without Neo4j. `tools.py` provides two Tier 1 coarse-grained read tools: `load_recipe` (loads a recipe graph from Neo4j and caches it) and `get_processing_instructions` (extracts measures, rules with resolved accounts, output spec from cache). `resources.py` exposes `ontology://merged` and `constraints://merged` as MCP resources. Server-side state in `__init__.py` caches loaded `GraphPattern` objects so an agent can load once, then query. Runs over STDIO transport (`python -m mcp_server`).
 
 **Public API** (`domain/__init__.py`): Re-exports everything from all layers via `__all__`. Import from `domain` directly. Persistence has its own package: import from `persistence`.
 

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "fp_core": {
+      "command": "python",
+      "args": ["-m", "mcp_server"],
+      "cwd": "/home/jarvis/Python Projects/FP_core"
+    }
+  }
+}
