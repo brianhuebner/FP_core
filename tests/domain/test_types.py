@@ -54,11 +54,11 @@ class TestEnumMemberCounts:
     def test_source_type_has_7_members(self):
         assert len(SourceType) == 7
 
-    def test_node_label_has_7_members(self):
-        assert len(NodeLabel) == 7
+    def test_node_label_has_19_members(self):
+        assert len(NodeLabel) == 19
 
-    def test_relationship_type_has_12_members(self):
-        assert len(RelationshipType) == 12
+    def test_relationship_type_has_26_members(self):
+        assert len(RelationshipType) == 26
 
 
 # ============================================================================

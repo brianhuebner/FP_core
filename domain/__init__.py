@@ -41,9 +41,49 @@ from domain.ontology import (
     validate_temporal_ordering,
     validate_transaction_balance,
 )
+# Layer 1 — Recipe types
+from domain.types_recipe import (
+    AccountingRecipe,
+    AccountSlot,
+    AggregationOp,
+    BatchFormat,
+    Column,
+    ColumnDataType,
+    Condition,
+    ConditionOp,
+    MappingRule,
+    Measure,
+    OutputColumn,
+    OutputFormat,
+    SemanticRole,
+    SourceSchema,
+    TransformOp,
+    ValidationRule,
+)
+# Layer 2 — Recipe ontology & validation
+from domain.ontology_recipe import (
+    RECIPE_ONTOLOGY,
+    RECIPE_RELATIONSHIP_CONSTRAINTS,
+    REFERENCE_RELATIONSHIP_SOURCES,
+    merged_ontology,
+    merged_relationship_constraints,
+    validate_mapping_rule_completeness,
+    validate_measure_references_column,
+    validate_recipe_has_schema,
+    validate_slot_has_mapping,
+    validate_uses_reference,
+)
+# Layer 3 — Pure domain logic
+from domain.logic import (
+    build_recipe_pattern,
+    build_source_schema_pattern,
+    extract_debit_credit_slots,
+    extract_measures_for_schema,
+    validate_recipe,
+)
 
 __all__ = [
-    # Layer 1 — Domain types
+    # Layer 1 — Core domain types
     "Account",
     "AccountType",
     "AllocationRule",
@@ -65,7 +105,24 @@ __all__ = [
     "SourceType",
     "Transaction",
     "TransactionLine",
-    # Layer 2 — Ontology & Validation
+    # Layer 1 — Recipe types
+    "AccountingRecipe",
+    "AccountSlot",
+    "AggregationOp",
+    "BatchFormat",
+    "Column",
+    "ColumnDataType",
+    "Condition",
+    "ConditionOp",
+    "MappingRule",
+    "Measure",
+    "OutputColumn",
+    "OutputFormat",
+    "SemanticRole",
+    "SourceSchema",
+    "TransformOp",
+    "ValidationRule",
+    # Layer 2 — Core ontology & validation
     "ACCOUNT_TYPE_BALANCE_MAP",
     "ONTOLOGY",
     "RELATIONSHIP_CONSTRAINTS",
@@ -83,4 +140,21 @@ __all__ = [
     "validate_relationship",
     "validate_temporal_ordering",
     "validate_transaction_balance",
+    # Layer 2 — Recipe ontology & validation
+    "RECIPE_ONTOLOGY",
+    "RECIPE_RELATIONSHIP_CONSTRAINTS",
+    "REFERENCE_RELATIONSHIP_SOURCES",
+    "merged_ontology",
+    "merged_relationship_constraints",
+    "validate_mapping_rule_completeness",
+    "validate_measure_references_column",
+    "validate_recipe_has_schema",
+    "validate_slot_has_mapping",
+    "validate_uses_reference",
+    # Layer 3 — Pure domain logic
+    "build_recipe_pattern",
+    "build_source_schema_pattern",
+    "extract_debit_credit_slots",
+    "extract_measures_for_schema",
+    "validate_recipe",
 ]

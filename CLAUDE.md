@@ -65,14 +65,14 @@ These are test-asserted — do not change without updating both code and tests:
 
 | Constant | Count | Notes |
 |---|---|---|
-| `NodeLabel` | 16 | 7 core accounting + 9 recipe/pipeline |
+| `NodeLabel` | 19 | 7 core accounting + 12 recipe/pipeline |
 | `RelationshipType` | 26 | All relationship types |
 | `ONTOLOGY` | 7 | Core accounting schemas |
-| `RECIPE_ONTOLOGY` | 9 | Recipe/pipeline schemas |
-| `merged_ontology()` | 16 | All schemas combined |
+| `RECIPE_ONTOLOGY` | 12 | Recipe/pipeline schemas (includes Reference sentinel) |
+| `merged_ontology()` | 19 | All schemas combined |
 | `RELATIONSHIP_CONSTRAINTS` | 11 | Core allowed edges (SYNCED_BY excluded) |
-| `RECIPE_RELATIONSHIP_CONSTRAINTS` | 11 | Recipe allowed edges (3 excluded — target types TBD) |
-| `merged_relationship_constraints()` | 22 | All constraints combined |
+| `RECIPE_RELATIONSHIP_CONSTRAINTS` | 14 | Recipe allowed edges (all resolved) |
+| `merged_relationship_constraints()` | 25 | All constraints combined |
 | `ACCOUNT_TYPE_BALANCE_MAP` | 7 | Account type → normal balance direction |
 | Total tests | 158 | Across 5 test files |
 
@@ -83,7 +83,8 @@ These are test-asserted — do not change without updating both code and tests:
 - Debits must equal credits — hard invariant in `validate_transaction_balance`
 - Enum values in property maps are stored as strings (not enum instances) at the graph layer
 - `recipe_id` is a template reference — NOT a multi-tenancy key
-- Reference data uses `Node.extra_labels` for labels outside `NodeLabel`; treated as opaque by validation
+- Reference data nodes carry `NodeLabel.REFERENCE` (sentinel) in `Node.labels` and their actual type in `Node.extra_labels`; FP_core validates the accounting side of `USES_REFERENCE` edges but treats the reference side as opaque (empty PropertySchema, no required fields)
+- Only `MappingRule`, `Condition`, and `AccountingRecipe` may source `USES_REFERENCE` edges (defined in `REFERENCE_RELATIONSHIP_SOURCES`); core accounting nodes cannot reach into the knowledge zone directly
 - `ValidationResult.merge()` combines results — valid only if all have zero errors
 - `compose_validators()` creates a single validator from multiple, using `merge` internally
 

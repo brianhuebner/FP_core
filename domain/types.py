@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, FrozenSet, List, Optional, Set
 
 
 # ============================================================================
@@ -77,6 +77,19 @@ class NodeLabel(Enum):
     ANALYTICAL_DIMENSION = "AnalyticalDimension"
     ALLOCATION_RULE = "AllocationRule"
     DATA_SOURCE = "DataSource"
+    # Recipe / Pipeline node types
+    SOURCE_SCHEMA = "SourceSchema"
+    COLUMN = "Column"
+    MEASURE = "Measure"
+    CONDITION = "Condition"
+    ACCOUNT_SLOT = "AccountSlot"
+    MAPPING_RULE = "MappingRule"
+    ACCOUNTING_RECIPE = "AccountingRecipe"
+    OUTPUT_FORMAT = "OutputFormat"
+    OUTPUT_COLUMN = "OutputColumn"
+    VALIDATION_RULE = "ValidationRule"
+    BATCH_FORMAT = "BatchFormat"
+    REFERENCE = "Reference"
 
 
 class RelationshipType(Enum):
@@ -92,6 +105,21 @@ class RelationshipType(Enum):
     APPLIED_TO = "APPLIED_TO"
     PROVIDES = "PROVIDES"
     SYNCED_BY = "SYNCED_BY"
+    # Recipe / Pipeline relationship types
+    HAS_COLUMN = "HAS_COLUMN"
+    HAS_MEASURE = "HAS_MEASURE"
+    AGGREGATES = "AGGREGATES"
+    WHEN = "WHEN"
+    SPLIT_BY = "SPLIT_BY"
+    TRANSFORMS = "TRANSFORMS"
+    HAS_SLOT = "HAS_SLOT"
+    HAS_RULE = "HAS_RULE"
+    MAPPED_TO = "MAPPED_TO"
+    DEBITS = "DEBITS"
+    CREDITS = "CREDITS"
+    HAS_VALIDATION = "HAS_VALIDATION"
+    HAS_BATCH_FORMAT = "HAS_BATCH_FORMAT"
+    USES_REFERENCE = "USES_REFERENCE"
 
 
 # ============================================================================
@@ -178,6 +206,7 @@ class Node:
     id: str
     labels: Set[NodeLabel]
     properties: Dict[str, Any]
+    extra_labels: FrozenSet[str] = frozenset()
 
 
 @dataclass(frozen=True)

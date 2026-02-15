@@ -150,8 +150,14 @@ class TestConstraintMaps:
     def test_balance_map_has_7_entries(self):
         assert len(ACCOUNT_TYPE_BALANCE_MAP) == 7
 
-    def test_all_node_labels_in_ontology(self):
-        for nl in NodeLabel:
+    def test_core_node_labels_in_ontology(self):
+        core_labels = {
+            NodeLabel.ACCOUNT, NodeLabel.TRANSACTION,
+            NodeLabel.TRANSACTION_LINE, NodeLabel.ENTITY,
+            NodeLabel.ANALYTICAL_DIMENSION, NodeLabel.ALLOCATION_RULE,
+            NodeLabel.DATA_SOURCE,
+        }
+        for nl in core_labels:
             assert nl in ONTOLOGY, f"{nl.value} missing from ONTOLOGY"
 
     def test_ontology_has_7_entries(self):

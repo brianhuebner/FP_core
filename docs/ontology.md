@@ -357,16 +357,32 @@ Custom Hybrid:
 
 ### 6. Extensibility Model
 
-**Three paths supported:**
+**The Accounting Boundary**
 
-**A. Extend Foundation Ontology (Preferred):**
+The graph has two zones: an **accounting zone** (strict, validated, typed) and a **knowledge zone** (flexible, user-defined, opaque). FP_core enforces invariants within the accounting zone and guards the boundary where reference data connects to accounting nodes, but does not validate the reference data itself.
+
+Reference data nodes carry `NodeLabel.REFERENCE` as a sentinel label (for constraint matching) and their actual type identity in `Node.extra_labels` (e.g., `"Employee"`, `"Product"`). Only three recipe-layer node types (`MappingRule`, `Condition`, `AccountingRecipe`) may source `USES_REFERENCE` edges into the knowledge zone. Core accounting nodes stay inside the boundary.
+
+See `docs/uses_reference_decision.md` for the full boundary architecture.
+
+**Four paths to extend the graph:**
+
+**A. Analytical Dimensions (Preferred for categorization):**
 ```
 User creates: ProjectPhase (subtype of AnalyticalDimension)
 System recognizes: It's a dimension, all dimension-aware recipes work
-Benefit: Maximum reusability
+Benefit: Maximum reusability, stays inside the accounting zone
 ```
 
-**B. Custom Properties:**
+**B. Reference Data (For non-accounting structures):**
+```
+User creates: (:Reference:Employee {employee_id: "E001", name: "Jane"})
+System treats: As opaque data connected via USES_REFERENCE
+Benefit: Full graph-native structure, no schema constraints
+Limitation: FP_core doesn't validate reference data internals
+```
+
+**C. Custom Properties:**
 ```
 User adds: transaction.custom_fields.project_phase
 System treats: As metadata, not semantic concept
@@ -374,7 +390,7 @@ Benefit: Quick customization
 Limitation: Recipes won't understand it without explicit teaching
 ```
 
-**C. Contribute to Community:**
+**D. Contribute to Community:**
 ```
 User proposes: ProjectPhase as standard dimension type
 Community approves: Becomes part of foundation ontology
