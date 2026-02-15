@@ -59,56 +59,134 @@ An AI agent trained with the skill uses the MCP tools to read a specific recipe 
 
 ---
 
+## Code Execution Pattern
+
+A naive MCP design exposes every function as a separate tool. For FP_core that would mean 20+ tool definitions loaded into the agent's context upfront, plus every intermediate result (full graph patterns, node lists, validation results) flowing through the model's context window on every call. This is the token inefficiency problem identified in [Anthropic's code execution research](https://www.anthropic.com/engineering/code-execution-with-mcp).
+
+### The Problem with Flat Tool Lists
+
+Consider what happens when an agent processes payroll data with a flat tool design:
+
+```
+Agent calls: load_recipe("payroll_monthly_v1")
+  → 33 nodes, 36 relationships flow INTO the model context
+Agent calls: extract_measures(pipeline, schema_id)
+  → The full pipeline is described AGAIN as a parameter
+  → 3 measure nodes flow back into context
+Agent calls: extract_slots(pipeline, rule_id)       ← repeated 3x
+Agent calls: extract_columns(pipeline, format_id)
+Agent calls: extract_batch(pipeline, format_id)
+```
+
+That's 7+ round trips, with the full graph pattern described repeatedly. The recipe data flows through the model's context window multiple times despite never changing.
+
+### The Solution: Server-Side State + Coarse Tools
+
+The MCP server holds state server-side. The agent works with **handles** (recipe IDs), not raw graph data. Coarse-grained tools compose multiple Layer 2-4 calls internally and return only what the agent needs to make decisions.
+
+```
+Agent calls: load_recipe("payroll_monthly_v1")
+  → Server loads graph, holds it in memory
+  → Returns: summary (node counts, schema name, rule names, column list)
+
+Agent calls: get_processing_instructions("payroll_monthly_v1")
+  → Server runs ALL extractors internally
+  → Returns: measures, DR/CR mappings, output spec — structured for action
+```
+
+Two calls instead of seven. No raw graph data in the context. The agent gets exactly the information it needs to compute measures and generate journal entries.
+
+### Progressive Disclosure
+
+Not every agent session needs every tool. The server organizes capabilities into tiers:
+
+**Tier 1 — Always loaded** (3-4 tools): The tools an agent needs for any interaction. These are the only tool definitions sent upfront.
+
+**Tier 2 — On-demand** (discovered via `list_tools`): Detailed tools the agent can request when it needs fine-grained control. The agent learns about these from the skill or by asking.
+
+**Tier 3 — Escape hatch** (`run_cypher`): Raw Cypher for exploration and edge cases. Available but not advertised.
+
+This reduces initial context from ~20 tool definitions to ~4, matching the 98%+ token reduction the Anthropic research demonstrated.
+
+---
+
 ## What the MCP Server Exposes
 
-### Tools (Actions the agent can take)
+### Tier 1 Tools — Core Operations (always loaded)
 
-These map directly to existing Layers 1-4 functions:
+These are coarse-grained tools that compose multiple internal functions. They work with recipe IDs (handles), not raw graph data.
 
-| Tool | Layer | Underlying Function | Purpose |
-|------|-------|---------------------|---------|
-| `load_recipe` | 4 | `load_pattern_by_recipe()` | Load a complete recipe graph from Neo4j |
-| `save_pattern` | 4 | `save_pattern()` | Write a validated graph pattern to Neo4j |
-| `delete_recipe` | 4 | `delete_pattern_by_recipe()` | Remove a recipe from Neo4j |
-| `verify_recipe` | 4 | `verify_pattern()` | Count nodes/relationships for a recipe |
-| `validate_template` | 2/3 | `validate_recipe()` + `validate_pipeline_connectivity()` + `validate_output_format()` | Gate 1: validate recipe structure |
-| `validate_node` | 2 | `validate_node_properties()` | Validate a single node against ontology |
-| `build_schema` | 3 | `build_source_schema_pattern()` | Build a SourceSchema subgraph |
-| `build_recipe` | 3 | `build_recipe_pattern()` | Build an AccountingRecipe subgraph |
-| `build_output` | 3 | `build_output_format_pattern()` | Build an OutputFormat subgraph |
-| `compose_pipeline` | 3 | `compose_pipeline_pattern()` | Merge subgraphs into a full pipeline |
-| `extract_measures` | 3 | `extract_measures_for_schema()` | Get measures for a schema |
-| `extract_slots` | 3 | `extract_debit_credit_slots()` | Get DR/CR account slots for a rule |
-| `extract_columns` | 3 | `extract_output_columns()` | Get output column definitions |
-| `extract_validations` | 3 | `extract_validation_rules()` | Get validation rules for a format |
-| `extract_batch` | 3 | `extract_batch_format()` | Get batch formatting spec |
-| `validate_balance` | 2 | `validate_transaction_balance()` | Gate 2: check debits = credits |
-| `validate_posting` | 2 | `validate_posting_allowed()` | Gate 2: check account is active |
-| `validate_direction` | 2 | `validate_account_balance_direction()` | Gate 2: check normal balance |
-| `get_ontology` | 2 | `merged_ontology()` | Get full schema definitions |
-| `get_constraints` | 2 | `merged_relationship_constraints()` | Get allowed relationship types |
-| `run_cypher` | 4 | `conn.run_query()` | Execute arbitrary read-only Cypher |
+| Tool | What It Does Internally | Returns to Agent |
+|------|------------------------|------------------|
+| `load_recipe` | `load_pattern_by_recipe()` → holds graph server-side | Summary: node/rel counts, schema name, rule names with DR/CR accounts, output columns, validation rules |
+| `build_and_save_pipeline` | Runs builders → `compose_pipeline_pattern()` → Gate 1 validators → `save_pattern()` | Validation result + node/rel counts (or errors if Gate 1 fails) |
+| `get_processing_instructions` | Runs all extractors on a loaded recipe | Structured instructions: measures (name, operation, column), mapping rules (priority, source_measure, DR/CR accounts, memo), output spec (columns, positions, format patterns) |
+| `validate_entries` | Runs all Gate 2 validators on submitted journal entries | Merged `ValidationResult`: balanced?, accounts active?, normal balance warnings |
 
-### Resources (Read-only context the agent can access)
+Note: `load_recipe` and `get_processing_instructions` are separate because the agent may want to inspect a recipe (load) without processing data through it (get instructions). But both avoid dumping raw graph data into the context.
+
+### Tier 2 Tools — Fine-Grained Control (on-demand)
+
+Available when the agent needs to build, modify, or inspect individual components. Discovered via `list_tools` or taught by the skill.
+
+| Tool | Underlying Function | When Needed |
+|------|---------------------|-------------|
+| `build_schema` | `build_source_schema_pattern()` | Building a new recipe step by step |
+| `build_recipe` | `build_recipe_pattern()` | Building a new recipe step by step |
+| `build_output` | `build_output_format_pattern()` | Building a new recipe step by step |
+| `validate_template` | `validate_recipe()` + `validate_pipeline_connectivity()` + `validate_output_format()` | Validating without saving |
+| `validate_node` | `validate_node_properties()` | Debugging a specific node |
+| `delete_recipe` | `delete_pattern_by_recipe()` | Cleanup |
+| `get_ontology` | `merged_ontology()` | Understanding what properties a node type requires |
+| `get_constraints` | `merged_relationship_constraints()` | Understanding allowed relationships |
+
+### Tier 3 — Escape Hatch
+
+| Tool | Purpose |
+|------|---------|
+| `run_cypher` | Execute read-only Cypher for ad-hoc exploration, debugging, or queries not covered by other tools |
+
+### Resources (Read-only context)
 
 | Resource | Content |
 |----------|---------|
-| `ontology://core` | Core accounting node schemas (7 types) |
-| `ontology://recipe` | Recipe pipeline node schemas (12 types) |
-| `ontology://merged` | All 19 schemas combined |
-| `constraints://core` | Core relationship constraints (11) |
-| `constraints://recipe` | Recipe relationship constraints (14) |
-| `constraints://merged` | All 25 constraints combined |
+| `ontology://merged` | All 19 node schemas (loaded on-demand, not upfront) |
+| `constraints://merged` | All 25 relationship constraints |
 | `balance-map://accounts` | Account type → normal balance direction (7 entries) |
 
-### Prompts (Workflow templates the agent can invoke)
+### Prompts (Workflow templates)
 
 | Prompt | Purpose |
 |--------|---------|
 | `build-pipeline` | Step-by-step workflow: schema → recipe → output → validate → save |
-| `validate-all` | Run Gate 1 on a pipeline pattern, report errors and warnings |
 | `process-data` | Load recipe, extract instructions, guide through data processing |
 | `gate2-checklist` | Run all Gate 2 validators on computed journal entries |
+
+### Server-Side State
+
+The MCP server maintains state between tool calls within a session:
+
+```python
+# Server holds loaded recipes in memory — agent works with IDs, not data
+_loaded_recipes: Dict[str, GraphPattern] = {}
+
+# load_recipe stores the graph server-side
+def handle_load_recipe(recipe_id: str) -> dict:
+    pattern = load_pattern_by_recipe(conn, recipe_id)
+    _loaded_recipes[recipe_id] = pattern    # server-side state
+    return summarize_pattern(pattern)        # agent gets summary only
+
+# get_processing_instructions reads from server-side state
+def handle_get_instructions(recipe_id: str) -> dict:
+    pattern = _loaded_recipes[recipe_id]     # no re-fetch needed
+    return {
+        "measures": extract_and_summarize_measures(pattern),
+        "mapping_rules": extract_and_summarize_rules(pattern),
+        "output_spec": extract_and_summarize_output(pattern),
+    }
+```
+
+This is the key architectural difference from the flat tool design. Data stays server-side. The agent receives structured summaries optimized for decision-making, not raw graph objects.
 
 ---
 
@@ -131,33 +209,38 @@ After (MCP-aware):
 
 ### 2. Workflow Discipline
 
-The skill should teach the two-gate workflow:
+The skill should teach the two-gate workflow using the tiered tools:
 
 ```
-Building a recipe:
+Building a recipe (simple path — Tier 1):
+  1. Use build_and_save_pipeline with all components
+     → Server builds, composes, validates (Gate 1), saves in one call
+     → Returns validation result + counts, or errors
+
+Building a recipe (step-by-step — Tier 2):
   1. Use build_schema to create the source schema pattern
   2. Use build_recipe to create the accounting recipe pattern
   3. Use build_output to create the output format pattern
-  4. Use compose_pipeline to merge them
-  5. Use validate_template (Gate 1) to check structural validity
-  6. Only if Gate 1 passes: use save_pattern to persist
+  4. Use validate_template (Gate 1) to check before saving
+  5. Only if Gate 1 passes: use build_and_save_pipeline to persist
 
-Processing data:
-  1. Use load_recipe to get the recipe graph
-  2. Use extract_measures, extract_slots, extract_columns to read instructions
+Processing data (Tier 1):
+  1. Use load_recipe to get a summary of the recipe
+  2. Use get_processing_instructions to read all instructions at once
   3. Compute measures and generate journal entries
-  4. Use validate_balance, validate_posting (Gate 2) before writing output
+  4. Use validate_entries (Gate 2) before writing output
   5. Only if Gate 2 passes: write the output file
 ```
 
-### 3. When to Use Which Tool
+### 3. Tool Tier Selection
 
-The skill should teach judgment about tool selection:
+The skill should teach when to use which tier:
 
-- Use `validate_template` for the whole pipeline, `validate_node` for individual nodes
-- Use `extract_measures` to understand a schema, `run_cypher` for ad-hoc exploration
-- Use `get_ontology` to understand what properties a node type requires
-- Never use `save_pattern` before `validate_template` passes
+- **Start with Tier 1** — `load_recipe` + `get_processing_instructions` handles most processing
+- **Drop to Tier 2** when building new recipes step-by-step, or debugging validation failures
+- **Use Tier 3** (`run_cypher`) only for ad-hoc exploration or edge cases not covered by tools
+- Use `get_ontology` (Tier 2) to understand what properties a node type requires
+- Never skip Gate 1 (`validate_template` or `build_and_save_pipeline`) before persisting
 
 ---
 
@@ -216,31 +299,36 @@ These types exist in `types.py` but are currently unused. They can remain as-is 
 
 ## Implementation Phases
 
-### Phase 1: MCP Server Skeleton
+### Phase 1: MCP Server Skeleton + Tier 1 Read Tools
 
 - Set up MCP server using the Python MCP SDK
-- Expose `get_ontology` and `get_constraints` as resources
-- Expose `load_recipe` and `verify_recipe` as tools (read-only)
+- Implement server-side state management (`_loaded_recipes` dict)
+- Implement `load_recipe` (coarse-grained: load graph → hold server-side → return summary)
+- Implement `get_processing_instructions` (coarse-grained: run all extractors → return structured instructions)
+- Expose `ontology://merged` and `constraints://merged` as resources
 - Test with Claude Desktop or Claude Code as the MCP client
+- Validate: agent can load a recipe and read its instructions with 2 tool calls
 
-### Phase 2: Full Tool Surface
+### Phase 2: Tier 1 Write Tools + Gate Validation
 
-- Expose all Layer 3 builders as tools (`build_schema`, `build_recipe`, `build_output`)
-- Expose `compose_pipeline` and `validate_template` (Gate 1)
-- Expose `save_pattern` and `delete_recipe` (write operations)
-- Expose all extractors as tools
-
-### Phase 3: Gate 2 + Data Processing Support
-
-- Expose Gate 2 validators (`validate_balance`, `validate_posting`, `validate_direction`)
-- Add `run_cypher` tool for ad-hoc graph queries
+- Implement `build_and_save_pipeline` (coarse-grained: build → compose → Gate 1 → save)
+- Implement `validate_entries` (coarse-grained: run all Gate 2 validators)
 - Add MCP prompts for guided workflows (`build-pipeline`, `process-data`)
+- Validate: agent can build, validate, save a recipe and validate output entries
 
-### Phase 4: Skill Evolution
+### Phase 3: Tier 2 Tools (Progressive Disclosure)
 
-- Update `outline_skill.md` with MCP tool references
+- Implement fine-grained builders (`build_schema`, `build_recipe`, `build_output`)
+- Implement `validate_template`, `validate_node`, `delete_recipe`
+- Implement `get_ontology`, `get_constraints`
+- Register as discoverable via `list_tools` but not loaded upfront
+- Validate: agent can drop to fine-grained mode for step-by-step recipe building
+
+### Phase 4: Tier 3 + Skill Evolution
+
+- Implement `run_cypher` escape hatch
+- Update `outline_skill.md` with MCP tool references and tier selection guidance
 - Add workflow discipline sections (Gate 1 → Gate 2 flow)
-- Add tool selection guidance
 - Test end-to-end: agent + skill + MCP server + Neo4j
 
 ### Phase 5: Measure Engine (if needed)
@@ -256,16 +344,22 @@ These types exist in `types.py` but are currently unused. They can remain as-is 
 
 ```
 mcp_server/
-  __init__.py          # MCP server entry point
-  tools.py             # Tool handlers (thin wrappers around Layers 2-4)
+  __init__.py          # MCP server entry point, session state
+  tools.py             # Tool handlers (Tier 1 coarse + Tier 2 fine-grained)
   resources.py         # Resource handlers (ontology, constraints)
   prompts.py           # Prompt templates (workflow guidance)
+  summarizers.py       # Pure functions: GraphPattern → agent-friendly summaries
 ```
 
-The MCP server is a thin wrapper. Each tool handler:
+The MCP server is a thin wrapper with one key responsibility beyond protocol translation: **server-side state management.** Loaded recipes are held in memory so the agent works with IDs (handles), not raw graph data.
+
+Each tool handler:
 1. Receives parameters from the MCP protocol
-2. Calls the appropriate Layer 2/3/4 function
-3. Serializes the result for MCP transport
+2. Reads/writes server-side state as needed
+3. Calls the appropriate Layer 2/3/4 function(s) — potentially composing several
+4. Uses `summarizers.py` to convert domain objects into agent-friendly responses
+
+`summarizers.py` is the new piece. It contains pure functions that transform `GraphPattern`, `Node`, and `ValidationResult` objects into concise dicts optimized for the agent's context window. This is where the token efficiency gains are realized — the summarizer decides what the agent needs to see vs. what stays server-side.
 
 No business logic lives in the MCP server. All logic stays in the pure domain layers where it's testable without MCP infrastructure.
 
