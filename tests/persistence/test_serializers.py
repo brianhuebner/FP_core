@@ -73,8 +73,8 @@ class TestSerializeNode:
 
         assert "MERGE" in cypher
         assert ":SourceSchema" in cypher
-        assert "n0.recipe_id: $n0_recipe_id" in cypher
-        assert "n0.name: $n0_name" in cypher
+        assert "recipe_id: $n0_recipe_id" in cypher
+        assert "name: $n0_name" in cypher
         assert params["n0_recipe_id"] == "r1"
         assert params["n0_name"] == "Stripe Charges"
 
@@ -125,14 +125,14 @@ class TestSerializeNode:
         cypher, params = serialize_node(node, index=0)
 
         # Reference has empty merge keys, so _node_id goes in MERGE
-        assert "n0._node_id: $n0__node_id" in cypher
+        assert "_node_id: $n0__node_id" in cypher
         assert params["n0__node_id"] == "ref1"
 
     def test_account_node_single_key(self):
         node = _account_node()
         cypher, params = serialize_node(node, index=0)
 
-        assert "n0.code: $n0_code" in cypher
+        assert "code: $n0_code" in cypher
         assert params["n0_code"] == "1200"
         assert "n0._node_id = $n0__node_id" in cypher
 

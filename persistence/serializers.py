@@ -38,13 +38,13 @@ def serialize_node(
 
     # For Reference nodes with no merge keys, use _node_id as the merge key
     if not merge_key_names:
-        merge_props = f"{var}._node_id: ${var}__node_id"
+        merge_props = f"_node_id: ${var}__node_id"
         params[f"{var}__node_id"] = node.id
     else:
         merge_parts = []
         for key in merge_key_names:
             param_name = f"{var}_{key}"
-            merge_parts.append(f"{var}.{key}: ${param_name}")
+            merge_parts.append(f"{key}: ${param_name}")
             params[param_name] = node.properties.get(key)
         merge_props = ", ".join(merge_parts)
 
@@ -156,12 +156,12 @@ def _match_props_for_node(
         # Reference-style: match by _node_id
         param_name = f"{var}__node_id"
         params[param_name] = node.id
-        return f"{var}._node_id: ${param_name}"
+        return f"_node_id: ${param_name}"
 
     parts = []
     for key in merge_key_names:
         param_name = f"{var}_{key}"
-        parts.append(f"{var}.{key}: ${param_name}")
+        parts.append(f"{key}: ${param_name}")
         params[param_name] = node.properties.get(key)
     return ", ".join(parts)
 

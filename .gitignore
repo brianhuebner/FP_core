@@ -12,3 +12,6 @@ build/
 .env
 .venv/
 venv/
+
+# Docs with secrets
+docs/environment_and_best_practices.md
