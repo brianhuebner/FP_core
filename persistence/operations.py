@@ -44,10 +44,12 @@ def load_pattern_by_recipe(
     node_records = conn.run_query(node_query, {"id": recipe_id})
 
     # Also find nodes one hop away (e.g. Account nodes via MAPPED_TO)
+    # coalesce handles nodes that lack recipe_id/format_id (NULL = $id → NULL,
+    # which would wrongly filter them out without coalesce)
     hop_query = """
     MATCH (n)-[r]-(m)
     WHERE (n.recipe_id = $id OR n.format_id = $id)
-      AND NOT (m.recipe_id = $id OR m.format_id = $id)
+      AND NOT (coalesce(m.recipe_id, '') = $id OR coalesce(m.format_id, '') = $id)
     RETURN DISTINCT labels(m) AS labels, properties(m) AS properties
     """
     hop_records = conn.run_query(hop_query, {"id": recipe_id})
