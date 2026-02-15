@@ -15,8 +15,11 @@ from domain.ontology_recipe import (
     REFERENCE_RELATIONSHIP_SOURCES,
     merged_ontology,
     merged_relationship_constraints,
+    validate_batch_format_references_column,
     validate_mapping_rule_completeness,
     validate_measure_references_column,
+    validate_output_column_positions_unique,
+    validate_output_format_has_columns,
     validate_recipe_has_schema,
     validate_slot_has_mapping,
     validate_uses_reference,
@@ -416,3 +419,225 @@ class TestValidateUsesReference:
         result = validate_uses_reference(pattern)
         assert result.is_valid is False
         assert any("unknown source" in e for e in result.errors)
+
+
+# ============================================================================
+# HAS_COLUMN constraint fix verification
+# ============================================================================
+
+class TestHasColumnConstraintFix:
+    def test_has_column_includes_output_format_pair(self):
+        pairs = RECIPE_RELATIONSHIP_CONSTRAINTS[RelationshipType.HAS_COLUMN]
+        assert (NodeLabel.OUTPUT_FORMAT, NodeLabel.OUTPUT_COLUMN) in pairs
+
+    def test_output_format_has_outgoing_has_column(self):
+        schema = RECIPE_ONTOLOGY[NodeLabel.OUTPUT_FORMAT]
+        col_rels = [
+            r for r in schema.outgoing_relationships
+            if r.relationship_type == RelationshipType.HAS_COLUMN
+        ]
+        assert len(col_rels) == 1
+        assert NodeLabel.OUTPUT_COLUMN in col_rels[0].target_labels
+
+    def test_output_column_has_incoming_has_column(self):
+        schema = RECIPE_ONTOLOGY[NodeLabel.OUTPUT_COLUMN]
+        col_rels = [
+            r for r in schema.incoming_relationships
+            if r.relationship_type == RelationshipType.HAS_COLUMN
+        ]
+        assert len(col_rels) == 1
+        assert NodeLabel.OUTPUT_FORMAT in col_rels[0].source_labels
+
+    def test_merged_output_format_has_column(self):
+        merged = merged_ontology()
+        of = merged[NodeLabel.OUTPUT_FORMAT]
+        col_rels = [
+            r for r in of.outgoing_relationships
+            if r.relationship_type == RelationshipType.HAS_COLUMN
+        ]
+        assert len(col_rels) == 1
+
+
+# ============================================================================
+# validate_output_format_has_columns
+# ============================================================================
+
+class TestValidateOutputFormatHasColumns:
+    def test_format_with_columns_valid(self):
+        fmt = Node(
+            id="fmt1", labels={NodeLabel.OUTPUT_FORMAT},
+            properties={"recipe_id": "r1", "name": "JE", "target_system": "sage", "file_format": "csv"},
+        )
+        col = Node(
+            id="oc1", labels={NodeLabel.OUTPUT_COLUMN},
+            properties={"format_id": "fmt1", "name": "date", "position": 0, "data_type": "date"},
+        )
+        rel = Relationship(
+            id="r1", type=RelationshipType.HAS_COLUMN,
+            start_node_id="fmt1", end_node_id="oc1", properties={},
+        )
+        pattern = GraphPattern(nodes=[fmt, col], relationships=[rel])
+        result = validate_output_format_has_columns(pattern)
+        assert result.is_valid is True
+
+    def test_format_without_columns_fails(self):
+        fmt = Node(
+            id="fmt1", labels={NodeLabel.OUTPUT_FORMAT},
+            properties={"recipe_id": "r1", "name": "JE", "target_system": "sage", "file_format": "csv"},
+        )
+        pattern = GraphPattern(nodes=[fmt], relationships=[])
+        result = validate_output_format_has_columns(pattern)
+        assert result.is_valid is False
+        assert any("no HAS_COLUMN" in e for e in result.errors)
+
+    def test_no_formats_succeeds(self):
+        pattern = GraphPattern(nodes=[], relationships=[])
+        result = validate_output_format_has_columns(pattern)
+        assert result.is_valid is True
+
+
+# ============================================================================
+# validate_output_column_positions_unique
+# ============================================================================
+
+class TestValidateOutputColumnPositionsUnique:
+    def test_unique_positions_valid(self):
+        fmt = Node(
+            id="fmt1", labels={NodeLabel.OUTPUT_FORMAT},
+            properties={"recipe_id": "r1", "name": "JE", "target_system": "sage", "file_format": "csv"},
+        )
+        col1 = Node(
+            id="oc1", labels={NodeLabel.OUTPUT_COLUMN},
+            properties={"format_id": "fmt1", "name": "date", "position": 0, "data_type": "date"},
+        )
+        col2 = Node(
+            id="oc2", labels={NodeLabel.OUTPUT_COLUMN},
+            properties={"format_id": "fmt1", "name": "amount", "position": 1, "data_type": "decimal"},
+        )
+        r1 = Relationship(
+            id="r1", type=RelationshipType.HAS_COLUMN,
+            start_node_id="fmt1", end_node_id="oc1", properties={},
+        )
+        r2 = Relationship(
+            id="r2", type=RelationshipType.HAS_COLUMN,
+            start_node_id="fmt1", end_node_id="oc2", properties={},
+        )
+        pattern = GraphPattern(nodes=[fmt, col1, col2], relationships=[r1, r2])
+        result = validate_output_column_positions_unique(pattern)
+        assert result.is_valid is True
+
+    def test_duplicate_positions_fails(self):
+        fmt = Node(
+            id="fmt1", labels={NodeLabel.OUTPUT_FORMAT},
+            properties={"recipe_id": "r1", "name": "JE", "target_system": "sage", "file_format": "csv"},
+        )
+        col1 = Node(
+            id="oc1", labels={NodeLabel.OUTPUT_COLUMN},
+            properties={"format_id": "fmt1", "name": "date", "position": 0, "data_type": "date"},
+        )
+        col2 = Node(
+            id="oc2", labels={NodeLabel.OUTPUT_COLUMN},
+            properties={"format_id": "fmt1", "name": "amount", "position": 0, "data_type": "decimal"},
+        )
+        r1 = Relationship(
+            id="r1", type=RelationshipType.HAS_COLUMN,
+            start_node_id="fmt1", end_node_id="oc1", properties={},
+        )
+        r2 = Relationship(
+            id="r2", type=RelationshipType.HAS_COLUMN,
+            start_node_id="fmt1", end_node_id="oc2", properties={},
+        )
+        pattern = GraphPattern(nodes=[fmt, col1, col2], relationships=[r1, r2])
+        result = validate_output_column_positions_unique(pattern)
+        assert result.is_valid is False
+        assert any("duplicate" in e for e in result.errors)
+
+    def test_no_formats_succeeds(self):
+        pattern = GraphPattern(nodes=[], relationships=[])
+        result = validate_output_column_positions_unique(pattern)
+        assert result.is_valid is True
+
+
+# ============================================================================
+# validate_batch_format_references_column
+# ============================================================================
+
+class TestValidateBatchFormatReferencesColumn:
+    def test_matching_columns_valid(self):
+        fmt = Node(
+            id="fmt1", labels={NodeLabel.OUTPUT_FORMAT},
+            properties={"recipe_id": "r1", "name": "JE", "target_system": "sage", "file_format": "csv"},
+        )
+        col1 = Node(
+            id="oc1", labels={NodeLabel.OUTPUT_COLUMN},
+            properties={"format_id": "fmt1", "name": "entity", "position": 0, "data_type": "string"},
+        )
+        col2 = Node(
+            id="oc2", labels={NodeLabel.OUTPUT_COLUMN},
+            properties={"format_id": "fmt1", "name": "posting_date", "position": 1, "data_type": "date"},
+        )
+        batch = Node(
+            id="b1", labels={NodeLabel.BATCH_FORMAT},
+            properties={
+                "recipe_id": "r1", "entry_separator": "newline",
+                "grouping_column": "entity", "date_column": "posting_date",
+            },
+        )
+        cr1 = Relationship(id="cr1", type=RelationshipType.HAS_COLUMN, start_node_id="fmt1", end_node_id="oc1", properties={})
+        cr2 = Relationship(id="cr2", type=RelationshipType.HAS_COLUMN, start_node_id="fmt1", end_node_id="oc2", properties={})
+        br = Relationship(id="br1", type=RelationshipType.HAS_BATCH_FORMAT, start_node_id="fmt1", end_node_id="b1", properties={})
+        pattern = GraphPattern(nodes=[fmt, col1, col2, batch], relationships=[cr1, cr2, br])
+        result = validate_batch_format_references_column(pattern)
+        assert result.is_valid is True
+        assert result.warnings == ()
+
+    def test_mismatched_grouping_column_warns(self):
+        fmt = Node(
+            id="fmt1", labels={NodeLabel.OUTPUT_FORMAT},
+            properties={"recipe_id": "r1", "name": "JE", "target_system": "sage", "file_format": "csv"},
+        )
+        col1 = Node(
+            id="oc1", labels={NodeLabel.OUTPUT_COLUMN},
+            properties={"format_id": "fmt1", "name": "date", "position": 0, "data_type": "date"},
+        )
+        batch = Node(
+            id="b1", labels={NodeLabel.BATCH_FORMAT},
+            properties={
+                "recipe_id": "r1", "entry_separator": "newline",
+                "grouping_column": "entity", "date_column": "date",
+            },
+        )
+        cr1 = Relationship(id="cr1", type=RelationshipType.HAS_COLUMN, start_node_id="fmt1", end_node_id="oc1", properties={})
+        br = Relationship(id="br1", type=RelationshipType.HAS_BATCH_FORMAT, start_node_id="fmt1", end_node_id="b1", properties={})
+        pattern = GraphPattern(nodes=[fmt, col1, batch], relationships=[cr1, br])
+        result = validate_batch_format_references_column(pattern)
+        assert result.is_valid is True
+        assert any("grouping_column" in w for w in result.warnings)
+
+    def test_mismatched_date_column_warns(self):
+        fmt = Node(
+            id="fmt1", labels={NodeLabel.OUTPUT_FORMAT},
+            properties={"recipe_id": "r1", "name": "JE", "target_system": "sage", "file_format": "csv"},
+        )
+        col1 = Node(
+            id="oc1", labels={NodeLabel.OUTPUT_COLUMN},
+            properties={"format_id": "fmt1", "name": "entity", "position": 0, "data_type": "string"},
+        )
+        batch = Node(
+            id="b1", labels={NodeLabel.BATCH_FORMAT},
+            properties={
+                "recipe_id": "r1", "entry_separator": "newline",
+                "grouping_column": "entity", "date_column": "posting_date",
+            },
+        )
+        cr1 = Relationship(id="cr1", type=RelationshipType.HAS_COLUMN, start_node_id="fmt1", end_node_id="oc1", properties={})
+        br = Relationship(id="br1", type=RelationshipType.HAS_BATCH_FORMAT, start_node_id="fmt1", end_node_id="b1", properties={})
+        pattern = GraphPattern(nodes=[fmt, col1, batch], relationships=[cr1, br])
+        result = validate_batch_format_references_column(pattern)
+        assert result.is_valid is True
+        assert any("date_column" in w for w in result.warnings)
+
+    def test_no_batch_formats_succeeds(self):
+        pattern = GraphPattern(nodes=[], relationships=[])
+        result = validate_batch_format_references_column(pattern)
+        assert result.is_valid is True

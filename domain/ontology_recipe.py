@@ -30,6 +30,7 @@ RECIPE_RELATIONSHIP_CONSTRAINTS: Dict[
 ] = {
     RelationshipType.HAS_COLUMN: (
         (NodeLabel.SOURCE_SCHEMA, NodeLabel.COLUMN),
+        (NodeLabel.OUTPUT_FORMAT, NodeLabel.OUTPUT_COLUMN),
     ),
     RelationshipType.HAS_MEASURE: (
         (NodeLabel.SOURCE_SCHEMA, NodeLabel.MEASURE),
@@ -523,6 +524,132 @@ def validate_measure_references_column(pattern: GraphPattern) -> ValidationResul
             f"Measure '{mid}' has no AGGREGATES relationship to a Column"
             for mid in sorted(missing)
         ))
+    return ValidationResult.success()
+
+
+def validate_output_format_has_columns(pattern: GraphPattern) -> ValidationResult:
+    """OutputFormat must have at least one HAS_COLUMN relationship to an OutputColumn."""
+    format_ids = {
+        n.id for n in pattern.nodes
+        if NodeLabel.OUTPUT_FORMAT in n.labels
+    }
+    if not format_ids:
+        return ValidationResult.success()
+
+    has_column_sources = {
+        rel.start_node_id
+        for rel in pattern.relationships
+        if rel.type == RelationshipType.HAS_COLUMN
+    }
+
+    missing = format_ids - has_column_sources
+    if missing:
+        return ValidationResult.failure(tuple(
+            f"OutputFormat '{fid}' has no HAS_COLUMN relationship to an OutputColumn"
+            for fid in sorted(missing)
+        ))
+    return ValidationResult.success()
+
+
+def validate_output_column_positions_unique(pattern: GraphPattern) -> ValidationResult:
+    """Within each OutputFormat's connected OutputColumns, all position values must be unique."""
+    format_ids = {
+        n.id for n in pattern.nodes
+        if NodeLabel.OUTPUT_FORMAT in n.labels
+    }
+    if not format_ids:
+        return ValidationResult.success()
+
+    node_map = {n.id: n for n in pattern.nodes}
+
+    errors: list[str] = []
+    for fid in sorted(format_ids):
+        column_ids = {
+            rel.end_node_id
+            for rel in pattern.relationships
+            if (
+                rel.type == RelationshipType.HAS_COLUMN
+                and rel.start_node_id == fid
+            )
+        }
+        positions: list[int] = []
+        for cid in column_ids:
+            col_node = node_map.get(cid)
+            if col_node and NodeLabel.OUTPUT_COLUMN in col_node.labels:
+                pos = col_node.properties.get("position")
+                if pos is not None:
+                    positions.append(pos)
+        seen: set[int] = set()
+        duplicates: set[int] = set()
+        for p in positions:
+            if p in seen:
+                duplicates.add(p)
+            seen.add(p)
+        if duplicates:
+            dup_str = ", ".join(str(d) for d in sorted(duplicates))
+            errors.append(
+                f"OutputFormat '{fid}' has duplicate OutputColumn positions: {dup_str}"
+            )
+
+    if errors:
+        return ValidationResult.failure(tuple(errors))
+    return ValidationResult.success()
+
+
+def validate_batch_format_references_column(pattern: GraphPattern) -> ValidationResult:
+    """BatchFormat's grouping_column/date_column should match a connected OutputColumn name (soft warning)."""
+    batch_ids = {
+        n.id for n in pattern.nodes
+        if NodeLabel.BATCH_FORMAT in n.labels
+    }
+    if not batch_ids:
+        return ValidationResult.success()
+
+    node_map = {n.id: n for n in pattern.nodes}
+
+    # Find which OutputFormat each BatchFormat is connected to
+    format_to_batch: dict[str, str] = {}
+    for rel in pattern.relationships:
+        if rel.type == RelationshipType.HAS_BATCH_FORMAT:
+            format_to_batch[rel.end_node_id] = rel.start_node_id
+
+    warnings: list[str] = []
+    for bid in sorted(batch_ids):
+        batch_node = node_map.get(bid)
+        if not batch_node:
+            continue
+        format_id = format_to_batch.get(bid)
+        if not format_id:
+            continue
+
+        # Gather OutputColumn names for this OutputFormat
+        column_names: set[str] = set()
+        for rel in pattern.relationships:
+            if (
+                rel.type == RelationshipType.HAS_COLUMN
+                and rel.start_node_id == format_id
+            ):
+                col_node = node_map.get(rel.end_node_id)
+                if col_node and NodeLabel.OUTPUT_COLUMN in col_node.labels:
+                    name = col_node.properties.get("name")
+                    if name is not None:
+                        column_names.add(name)
+
+        grouping = batch_node.properties.get("grouping_column")
+        if grouping and grouping not in column_names:
+            warnings.append(
+                f"BatchFormat '{bid}' grouping_column '{grouping}' "
+                f"does not match any OutputColumn name"
+            )
+        date_col = batch_node.properties.get("date_column")
+        if date_col and date_col not in column_names:
+            warnings.append(
+                f"BatchFormat '{bid}' date_column '{date_col}' "
+                f"does not match any OutputColumn name"
+            )
+
+    if warnings:
+        return ValidationResult.success(warnings=tuple(warnings))
     return ValidationResult.success()
 
 

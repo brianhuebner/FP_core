@@ -32,19 +32,19 @@ Python 3.12, no build step, no linter configured. Only dependency beyond stdlib 
 
 ```
 domain/
-  __init__.py          # Public API — re-exports everything via __all__ (~156 lines)
+  __init__.py          # Public API — re-exports everything via __all__ (~180 lines)
   types.py             # Layer 1: core enums + frozen dataclasses (~237 lines)
   types_recipe.py      # Layer 1: recipe enums + frozen dataclasses (~150 lines)
   ontology.py          # Layer 2: core schema, constraints, validators (~500 lines)
-  ontology_recipe.py   # Layer 2: recipe schema, constraints, validators (~515 lines)
-  logic.py             # Layer 3: pure functions for recipe graph building (~140 lines)
+  ontology_recipe.py   # Layer 2: recipe schema, constraints, validators (~686 lines)
+  logic.py             # Layer 3: pure functions for recipe graph building (~277 lines)
 tests/
   domain/
     test_types.py          # Layer 1 core type tests (~160 lines)
     test_types_recipe.py   # Layer 1 recipe type tests (~237 lines)
     test_ontology.py       # Layer 2 core ontology tests (~649 lines)
-    test_ontology_recipe.py # Layer 2 recipe ontology tests (~417 lines)
-    test_logic.py          # Layer 3 logic tests (~369 lines)
+    test_ontology_recipe.py # Layer 2 recipe ontology tests (~643 lines)
+    test_logic.py          # Layer 3 logic tests (~740 lines)
 docs/ontology.md       # Design doc: full ontology rationale (~453 lines)
 main.py                # Placeholder entry point (~16 lines)
 ```
@@ -55,7 +55,7 @@ main.py                # Placeholder entry point (~16 lines)
 
 **Layer 2 — Ontology & Validation** (`ontology.py`, `ontology_recipe.py`): Schema definitions (PropertySchema, EntitySchema, RelationshipConstraint), ontology dicts, constraint dicts, and pure validation functions returning `ValidationResult`. Hard blocks return errors; soft warnings return warnings but stay valid. `merged_ontology()` and `merged_relationship_constraints()` combine core + recipe schemas — not a naive dict merge, because cross-layer relationships require updating both sides.
 
-**Layer 3 — Logic** (`logic.py`): Pure functions (no I/O) for building and validating recipe graph patterns: `build_source_schema_pattern`, `build_recipe_pattern`, `validate_recipe`, `extract_measures_for_schema`, `extract_debit_credit_slots`.
+**Layer 3 — Logic** (`logic.py`): Pure functions (no I/O) for building and validating recipe graph patterns: `build_source_schema_pattern`, `build_recipe_pattern`, `validate_recipe`, `extract_measures_for_schema`, `extract_debit_credit_slots`, `build_output_format_pattern`, `extract_output_columns`, `extract_validation_rules`, `extract_batch_format`, `validate_output_format`, `compose_pipeline_pattern`, `validate_pipeline_connectivity`.
 
 **Public API** (`domain/__init__.py`): Re-exports everything from all layers via `__all__`. Import from `domain` directly.
 
@@ -74,7 +74,7 @@ These are test-asserted — do not change without updating both code and tests:
 | `RECIPE_RELATIONSHIP_CONSTRAINTS` | 14 | Recipe allowed edges (all resolved) |
 | `merged_relationship_constraints()` | 25 | All constraints combined |
 | `ACCOUNT_TYPE_BALANCE_MAP` | 7 | Account type → normal balance direction |
-| Total tests | 158 | Across 5 test files |
+| Total tests | 197 | Across 5 test files |
 
 ## Key Design Constraints
 

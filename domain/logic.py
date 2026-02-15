@@ -12,8 +12,11 @@ from domain.types import (
 )
 from domain.ontology import ValidationResult
 from domain.ontology_recipe import (
+    validate_batch_format_references_column,
     validate_mapping_rule_completeness,
     validate_measure_references_column,
+    validate_output_column_positions_unique,
+    validate_output_format_has_columns,
     validate_recipe_has_schema,
     validate_slot_has_mapping,
     validate_uses_reference,
@@ -138,3 +141,137 @@ def extract_debit_credit_slots(
     )
 
     return (debit_slots, credit_slots)
+
+
+def build_output_format_pattern(
+    format_node: Node,
+    column_nodes: List[Node],
+    column_rels: List[Relationship],
+    validation_nodes: List[Node] | None = None,
+    validation_rels: List[Relationship] | None = None,
+    batch_node: Node | None = None,
+    batch_rel: Relationship | None = None,
+) -> GraphPattern:
+    """Construct a GraphPattern for a complete output format subgraph.
+
+    Includes: format + output columns + optional validation rules + optional
+    batch format and all connecting relationships.
+    """
+    nodes: List[Node] = [format_node] + column_nodes
+    relationships = list(column_rels)
+    if validation_nodes:
+        nodes.extend(validation_nodes)
+    if validation_rels:
+        relationships.extend(validation_rels)
+    if batch_node is not None:
+        nodes.append(batch_node)
+    if batch_rel is not None:
+        relationships.append(batch_rel)
+    return GraphPattern(nodes=nodes, relationships=relationships)
+
+
+def extract_output_columns(
+    pattern: GraphPattern,
+    format_node_id: str,
+) -> Tuple[Node, ...]:
+    """Extract OutputColumn nodes connected to an OutputFormat via HAS_COLUMN."""
+    column_ids = {
+        rel.end_node_id
+        for rel in pattern.relationships
+        if (
+            rel.type == RelationshipType.HAS_COLUMN
+            and rel.start_node_id == format_node_id
+        )
+    }
+    return tuple(
+        n for n in pattern.nodes
+        if n.id in column_ids and NodeLabel.OUTPUT_COLUMN in n.labels
+    )
+
+
+def extract_validation_rules(
+    pattern: GraphPattern,
+    format_node_id: str,
+) -> Tuple[Node, ...]:
+    """Extract ValidationRule nodes connected to an OutputFormat via HAS_VALIDATION."""
+    rule_ids = {
+        rel.end_node_id
+        for rel in pattern.relationships
+        if (
+            rel.type == RelationshipType.HAS_VALIDATION
+            and rel.start_node_id == format_node_id
+        )
+    }
+    return tuple(
+        n for n in pattern.nodes
+        if n.id in rule_ids and NodeLabel.VALIDATION_RULE in n.labels
+    )
+
+
+def extract_batch_format(
+    pattern: GraphPattern,
+    format_node_id: str,
+) -> Node | None:
+    """Extract the BatchFormat node connected to an OutputFormat via HAS_BATCH_FORMAT.
+
+    Returns a single node or None (one-to-one relationship).
+    """
+    batch_ids = {
+        rel.end_node_id
+        for rel in pattern.relationships
+        if (
+            rel.type == RelationshipType.HAS_BATCH_FORMAT
+            and rel.start_node_id == format_node_id
+        )
+    }
+    for n in pattern.nodes:
+        if n.id in batch_ids and NodeLabel.BATCH_FORMAT in n.labels:
+            return n
+    return None
+
+
+def validate_output_format(pattern: GraphPattern) -> ValidationResult:
+    """Orchestrate all output format validators against a GraphPattern."""
+    return ValidationResult.merge(
+        validate_output_format_has_columns(pattern),
+        validate_output_column_positions_unique(pattern),
+        validate_batch_format_references_column(pattern),
+    )
+
+
+def compose_pipeline_pattern(
+    schema_pattern: GraphPattern,
+    recipe_pattern: GraphPattern,
+    output_pattern: GraphPattern | None = None,
+) -> GraphPattern:
+    """Concatenate nodes and relationships from all input patterns into one GraphPattern.
+
+    Output pattern is optional — a pipeline can be valid without an output format.
+    """
+    nodes = list(schema_pattern.nodes) + list(recipe_pattern.nodes)
+    relationships = list(schema_pattern.relationships) + list(recipe_pattern.relationships)
+    if output_pattern is not None:
+        nodes.extend(output_pattern.nodes)
+        relationships.extend(output_pattern.relationships)
+    return GraphPattern(nodes=nodes, relationships=relationships)
+
+
+def validate_pipeline_connectivity(pattern: GraphPattern) -> ValidationResult:
+    """Verify every AccountingRecipe's TRANSFORMS target node exists in the pattern.
+
+    Ensures the subgraphs are actually wired together, not just concatenated.
+    """
+    node_ids = {n.id for n in pattern.nodes}
+    errors: list[str] = []
+
+    for rel in pattern.relationships:
+        if rel.type == RelationshipType.TRANSFORMS:
+            if rel.end_node_id not in node_ids:
+                errors.append(
+                    f"TRANSFORMS target '{rel.end_node_id}' from recipe "
+                    f"'{rel.start_node_id}' not found in pattern"
+                )
+
+    if errors:
+        return ValidationResult.failure(tuple(errors))
+    return ValidationResult.success()

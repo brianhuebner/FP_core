@@ -9,10 +9,17 @@ from domain.types import (
     RelationshipType,
 )
 from domain.logic import (
+    build_output_format_pattern,
     build_recipe_pattern,
     build_source_schema_pattern,
+    compose_pipeline_pattern,
+    extract_batch_format,
     extract_debit_credit_slots,
     extract_measures_for_schema,
+    extract_output_columns,
+    extract_validation_rules,
+    validate_output_format,
+    validate_pipeline_connectivity,
     validate_recipe,
 )
 
@@ -367,3 +374,367 @@ class TestExtractDebitCreditSlots:
         debit_slots, credit_slots = extract_debit_credit_slots(pattern, "nonexistent")
         assert len(debit_slots) == 0
         assert len(credit_slots) == 0
+
+
+# ============================================================================
+# Helpers — output format test fixtures
+# ============================================================================
+
+def _format_node(node_id="fmt1"):
+    return Node(
+        id=node_id, labels={NodeLabel.OUTPUT_FORMAT},
+        properties={"recipe_id": "r1", "name": "JE Export", "target_system": "sage", "file_format": "csv"},
+    )
+
+
+def _output_column_node(node_id="oc1", name="date", position=0):
+    return Node(
+        id=node_id, labels={NodeLabel.OUTPUT_COLUMN},
+        properties={"format_id": "fmt1", "name": name, "position": position, "data_type": "date"},
+    )
+
+
+def _validation_rule_node(node_id="vr1", name="balance_check"):
+    return Node(
+        id=node_id, labels={NodeLabel.VALIDATION_RULE},
+        properties={"format_id": "fmt1", "name": name, "expression": "sum(debit) == sum(credit)", "scope": "batch"},
+    )
+
+
+def _batch_format_node(node_id="bf1"):
+    return Node(
+        id=node_id, labels={NodeLabel.BATCH_FORMAT},
+        properties={
+            "recipe_id": "r1", "entry_separator": "newline",
+            "grouping_column": "entity", "date_column": "posting_date",
+        },
+    )
+
+
+# ============================================================================
+# build_output_format_pattern
+# ============================================================================
+
+class TestBuildOutputFormatPattern:
+    def test_produces_valid_graph_pattern(self):
+        fmt = _format_node()
+        col1 = _output_column_node("oc1", "date", 0)
+        col2 = _output_column_node("oc2", "amount", 1)
+        cr1 = _rel("cr1", RelationshipType.HAS_COLUMN, "fmt1", "oc1")
+        cr2 = _rel("cr2", RelationshipType.HAS_COLUMN, "fmt1", "oc2")
+
+        pattern = build_output_format_pattern(
+            format_node=fmt,
+            column_nodes=[col1, col2],
+            column_rels=[cr1, cr2],
+        )
+
+        assert isinstance(pattern, GraphPattern)
+        assert len(pattern.nodes) == 3
+        assert len(pattern.relationships) == 2
+
+    def test_with_validation_and_batch(self):
+        fmt = _format_node()
+        col = _output_column_node()
+        cr = _rel("cr1", RelationshipType.HAS_COLUMN, "fmt1", "oc1")
+        vr = _validation_rule_node()
+        vr_rel = _rel("vr1", RelationshipType.HAS_VALIDATION, "fmt1", "vr1")
+        bf = _batch_format_node()
+        bf_rel = _rel("bf1", RelationshipType.HAS_BATCH_FORMAT, "fmt1", "bf1")
+
+        pattern = build_output_format_pattern(
+            format_node=fmt,
+            column_nodes=[col],
+            column_rels=[cr],
+            validation_nodes=[vr],
+            validation_rels=[vr_rel],
+            batch_node=bf,
+            batch_rel=bf_rel,
+        )
+
+        assert len(pattern.nodes) == 4
+        assert len(pattern.relationships) == 3
+
+    def test_format_node_is_first(self):
+        fmt = _format_node()
+        col = _output_column_node()
+        cr = _rel("cr1", RelationshipType.HAS_COLUMN, "fmt1", "oc1")
+
+        pattern = build_output_format_pattern(
+            format_node=fmt,
+            column_nodes=[col],
+            column_rels=[cr],
+        )
+
+        assert pattern.nodes[0].id == "fmt1"
+
+    def test_without_optional_params(self):
+        fmt = _format_node()
+        col = _output_column_node()
+        cr = _rel("cr1", RelationshipType.HAS_COLUMN, "fmt1", "oc1")
+
+        pattern = build_output_format_pattern(
+            format_node=fmt,
+            column_nodes=[col],
+            column_rels=[cr],
+        )
+
+        assert len(pattern.nodes) == 2
+        assert len(pattern.relationships) == 1
+
+
+# ============================================================================
+# extract_output_columns
+# ============================================================================
+
+class TestExtractOutputColumns:
+    def test_extracts_connected_columns(self):
+        fmt = _format_node()
+        col1 = _output_column_node("oc1", "date", 0)
+        col2 = _output_column_node("oc2", "amount", 1)
+        col3 = _output_column_node("oc3", "other", 2)  # not connected
+        r1 = _rel("r1", RelationshipType.HAS_COLUMN, "fmt1", "oc1")
+        r2 = _rel("r2", RelationshipType.HAS_COLUMN, "fmt1", "oc2")
+
+        pattern = GraphPattern(
+            nodes=[fmt, col1, col2, col3],
+            relationships=[r1, r2],
+        )
+        columns = extract_output_columns(pattern, "fmt1")
+        assert len(columns) == 2
+        col_ids = {c.id for c in columns}
+        assert "oc1" in col_ids
+        assert "oc2" in col_ids
+        assert "oc3" not in col_ids
+
+    def test_returns_empty_for_no_connections(self):
+        fmt = _format_node()
+        col = _output_column_node()
+        pattern = GraphPattern(nodes=[fmt, col], relationships=[])
+        columns = extract_output_columns(pattern, "fmt1")
+        assert len(columns) == 0
+
+    def test_returns_empty_for_unknown_format(self):
+        pattern = GraphPattern(nodes=[], relationships=[])
+        columns = extract_output_columns(pattern, "nonexistent")
+        assert len(columns) == 0
+
+
+# ============================================================================
+# extract_validation_rules
+# ============================================================================
+
+class TestExtractValidationRules:
+    def test_extracts_connected_rules(self):
+        fmt = _format_node()
+        vr1 = _validation_rule_node("vr1", "balance_check")
+        vr2 = _validation_rule_node("vr2", "date_check")
+        r1 = _rel("r1", RelationshipType.HAS_VALIDATION, "fmt1", "vr1")
+        r2 = _rel("r2", RelationshipType.HAS_VALIDATION, "fmt1", "vr2")
+
+        pattern = GraphPattern(
+            nodes=[fmt, vr1, vr2],
+            relationships=[r1, r2],
+        )
+        rules = extract_validation_rules(pattern, "fmt1")
+        assert len(rules) == 2
+
+    def test_returns_empty_for_no_connections(self):
+        fmt = _format_node()
+        vr = _validation_rule_node()
+        pattern = GraphPattern(nodes=[fmt, vr], relationships=[])
+        rules = extract_validation_rules(pattern, "fmt1")
+        assert len(rules) == 0
+
+    def test_returns_empty_for_unknown_format(self):
+        pattern = GraphPattern(nodes=[], relationships=[])
+        rules = extract_validation_rules(pattern, "nonexistent")
+        assert len(rules) == 0
+
+
+# ============================================================================
+# extract_batch_format
+# ============================================================================
+
+class TestExtractBatchFormat:
+    def test_extracts_connected_batch(self):
+        fmt = _format_node()
+        bf = _batch_format_node()
+        rel = _rel("br1", RelationshipType.HAS_BATCH_FORMAT, "fmt1", "bf1")
+
+        pattern = GraphPattern(nodes=[fmt, bf], relationships=[rel])
+        result = extract_batch_format(pattern, "fmt1")
+        assert result is not None
+        assert result.id == "bf1"
+
+    def test_returns_none_for_no_batch(self):
+        fmt = _format_node()
+        pattern = GraphPattern(nodes=[fmt], relationships=[])
+        result = extract_batch_format(pattern, "fmt1")
+        assert result is None
+
+    def test_returns_none_for_unknown_format(self):
+        pattern = GraphPattern(nodes=[], relationships=[])
+        result = extract_batch_format(pattern, "nonexistent")
+        assert result is None
+
+
+# ============================================================================
+# validate_output_format
+# ============================================================================
+
+class TestValidateOutputFormat:
+    def test_valid_output_format_passes(self):
+        fmt = _format_node()
+        col1 = _output_column_node("oc1", "entity", 0)
+        col2 = _output_column_node("oc2", "posting_date", 1)
+        cr1 = _rel("cr1", RelationshipType.HAS_COLUMN, "fmt1", "oc1")
+        cr2 = _rel("cr2", RelationshipType.HAS_COLUMN, "fmt1", "oc2")
+        bf = _batch_format_node()
+        br = _rel("br1", RelationshipType.HAS_BATCH_FORMAT, "fmt1", "bf1")
+
+        pattern = GraphPattern(
+            nodes=[fmt, col1, col2, bf],
+            relationships=[cr1, cr2, br],
+        )
+        result = validate_output_format(pattern)
+        assert result.is_valid is True
+
+    def test_missing_columns_fails(self):
+        fmt = _format_node()
+        pattern = GraphPattern(nodes=[fmt], relationships=[])
+        result = validate_output_format(pattern)
+        assert result.is_valid is False
+        assert any("no HAS_COLUMN" in e for e in result.errors)
+
+    def test_duplicate_positions_fails(self):
+        fmt = _format_node()
+        col1 = _output_column_node("oc1", "date", 0)
+        col2 = _output_column_node("oc2", "amount", 0)  # duplicate position
+        cr1 = _rel("cr1", RelationshipType.HAS_COLUMN, "fmt1", "oc1")
+        cr2 = _rel("cr2", RelationshipType.HAS_COLUMN, "fmt1", "oc2")
+
+        pattern = GraphPattern(
+            nodes=[fmt, col1, col2],
+            relationships=[cr1, cr2],
+        )
+        result = validate_output_format(pattern)
+        assert result.is_valid is False
+        assert any("duplicate" in e for e in result.errors)
+
+    def test_batch_column_mismatch_warns(self):
+        fmt = _format_node()
+        col1 = _output_column_node("oc1", "date", 0)
+        cr1 = _rel("cr1", RelationshipType.HAS_COLUMN, "fmt1", "oc1")
+        bf = _batch_format_node()  # references "entity" and "posting_date", neither match "date"
+        br = _rel("br1", RelationshipType.HAS_BATCH_FORMAT, "fmt1", "bf1")
+
+        pattern = GraphPattern(
+            nodes=[fmt, col1, bf],
+            relationships=[cr1, br],
+        )
+        result = validate_output_format(pattern)
+        assert result.is_valid is True
+        assert len(result.warnings) > 0
+
+
+# ============================================================================
+# compose_pipeline_pattern
+# ============================================================================
+
+class TestComposePipelinePattern:
+    def test_two_patterns(self):
+        schema = _schema_node()
+        col = _column_node()
+        cr = _rel("cr1", RelationshipType.HAS_COLUMN, "schema1", "col1")
+        schema_pattern = GraphPattern(nodes=[schema, col], relationships=[cr])
+
+        recipe = _recipe_node()
+        transforms = _rel("t1", RelationshipType.TRANSFORMS, "recipe1", "schema1")
+        recipe_pattern = GraphPattern(nodes=[recipe], relationships=[transforms])
+
+        result = compose_pipeline_pattern(schema_pattern, recipe_pattern)
+        assert len(result.nodes) == 3
+        assert len(result.relationships) == 2
+
+    def test_three_patterns(self):
+        schema_pattern = GraphPattern(nodes=[_schema_node()], relationships=[])
+        recipe_pattern = GraphPattern(nodes=[_recipe_node()], relationships=[])
+        output_pattern = GraphPattern(nodes=[_format_node()], relationships=[])
+
+        result = compose_pipeline_pattern(schema_pattern, recipe_pattern, output_pattern)
+        assert len(result.nodes) == 3
+
+    def test_output_optional(self):
+        schema_pattern = GraphPattern(nodes=[_schema_node()], relationships=[])
+        recipe_pattern = GraphPattern(nodes=[_recipe_node()], relationships=[])
+
+        result = compose_pipeline_pattern(schema_pattern, recipe_pattern)
+        assert len(result.nodes) == 2
+
+    def test_preserves_all_relationships(self):
+        r1 = _rel("r1", RelationshipType.HAS_COLUMN, "schema1", "col1")
+        r2 = _rel("r2", RelationshipType.TRANSFORMS, "recipe1", "schema1")
+        r3 = _rel("r3", RelationshipType.HAS_COLUMN, "fmt1", "oc1")
+
+        schema_pattern = GraphPattern(nodes=[_schema_node()], relationships=[r1])
+        recipe_pattern = GraphPattern(nodes=[_recipe_node()], relationships=[r2])
+        output_pattern = GraphPattern(nodes=[_format_node()], relationships=[r3])
+
+        result = compose_pipeline_pattern(schema_pattern, recipe_pattern, output_pattern)
+        assert len(result.relationships) == 3
+
+
+# ============================================================================
+# validate_pipeline_connectivity
+# ============================================================================
+
+class TestValidatePipelineConnectivity:
+    def test_connected_passes(self):
+        schema = _schema_node()
+        recipe = _recipe_node()
+        transforms = _rel("t1", RelationshipType.TRANSFORMS, "recipe1", "schema1")
+
+        pattern = GraphPattern(
+            nodes=[schema, recipe],
+            relationships=[transforms],
+        )
+        result = validate_pipeline_connectivity(pattern)
+        assert result.is_valid is True
+
+    def test_disconnected_fails(self):
+        recipe = _recipe_node()
+        transforms = _rel("t1", RelationshipType.TRANSFORMS, "recipe1", "schema1")
+        # schema1 node is missing from pattern
+        pattern = GraphPattern(
+            nodes=[recipe],
+            relationships=[transforms],
+        )
+        result = validate_pipeline_connectivity(pattern)
+        assert result.is_valid is False
+        assert any("not found" in e for e in result.errors)
+
+    def test_no_transforms_passes(self):
+        pattern = GraphPattern(nodes=[_schema_node()], relationships=[])
+        result = validate_pipeline_connectivity(pattern)
+        assert result.is_valid is True
+
+    def test_multiple_recipes_one_disconnected(self):
+        schema = _schema_node()
+        recipe1 = _recipe_node("recipe1")
+        recipe2 = Node(
+            id="recipe2", labels={NodeLabel.ACCOUNTING_RECIPE},
+            properties={"recipe_id": "r2", "name": "Other", "source_schema": "other_schema"},
+        )
+        t1 = _rel("t1", RelationshipType.TRANSFORMS, "recipe1", "schema1")
+        t2 = _rel("t2", RelationshipType.TRANSFORMS, "recipe2", "schema2")
+        # schema2 missing
+
+        pattern = GraphPattern(
+            nodes=[schema, recipe1, recipe2],
+            relationships=[t1, t2],
+        )
+        result = validate_pipeline_connectivity(pattern)
+        assert result.is_valid is False
+        assert len(result.errors) == 1
+        assert "schema2" in result.errors[0]
