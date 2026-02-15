@@ -108,6 +108,39 @@ Not every agent session needs every tool. The server organizes capabilities into
 
 This reduces initial context from ~20 tool definitions to ~4, matching the 98%+ token reduction the Anthropic research demonstrated.
 
+### Privacy-Preserving Operations
+
+Accounting data routinely contains personally identifiable information (PII) and sensitive financial data:
+
+- **Payroll**: employee names, SSNs, bank routing/account numbers, salary amounts
+- **Accounts Payable**: vendor tax IDs, bank details, payment amounts
+- **Accounts Receivable**: customer addresses, credit card tokens, invoice details
+- **General Ledger**: compensation details traceable to individuals
+
+With the server-side state pattern, **source data never enters the model's context by default.** The agent sends a recipe ID and receives processing instructions (column names, aggregation operations, account codes). The actual employee records, dollar amounts, and personal identifiers stay in the execution environment.
+
+When the agent needs to work with data values — computing measures, generating journal entries — the MCP server can tokenize sensitive fields automatically:
+
+```
+Raw source row (stays server-side):
+  {"employee_id": "EMP001", "ssn": "123-45-6789", "name": "Jane Smith",
+   "gross_pay": 5000.00, "bank_routing": "021000021"}
+
+What the agent sees (if it needs row-level detail):
+  {"employee_id": "EMP001", "ssn": "[SSN_1]", "name": "[NAME_1]",
+   "gross_pay": 5000.00, "bank_routing": "[ROUTING_1]"}
+
+What the agent typically sees (aggregated — no PII at all):
+  {"total_gross_pay": 24500.00, "total_tax_withheld": 6125.00,
+   "total_net_pay": 18375.00, "row_count": 5}
+```
+
+The aggregated path is the common case. Payroll journal entries don't need individual employee names — they need `SUM(gross_pay)`. The recipe graph already declares this: `Measure.operation = "sum"`, `AGGREGATES → Column(name="gross_pay")`. The server computes the aggregation and returns totals. Individual records never leave the server.
+
+For cases where the agent does need row-level detail (debugging, exception handling, line-item entries), the server tokenizes PII fields before returning them. The real values stay in a server-side token map. When the agent writes output, the server de-tokenizes on the way out — the final CSV or journal export contains real values, but the model never saw them.
+
+This is not just a nice-to-have. Accounting firms handling client payroll, multi-entity consolidations, or tax preparation have regulatory obligations (SOX, GDPR, state privacy laws) that restrict where PII can flow. A design where employee SSNs pass through an LLM's context window is a compliance problem. Server-side state with tokenization avoids it by construction.
+
 ---
 
 ## What the MCP Server Exposes
@@ -349,6 +382,7 @@ mcp_server/
   resources.py         # Resource handlers (ontology, constraints)
   prompts.py           # Prompt templates (workflow guidance)
   summarizers.py       # Pure functions: GraphPattern → agent-friendly summaries
+  tokenizer.py         # PII tokenization/de-tokenization for source data
 ```
 
 The MCP server is a thin wrapper with one key responsibility beyond protocol translation: **server-side state management.** Loaded recipes are held in memory so the agent works with IDs (handles), not raw graph data.
