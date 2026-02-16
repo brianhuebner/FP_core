@@ -413,3 +413,94 @@ outline_skill.md          — EVOLVES: adds MCP tool references
 ```
 
 The key architectural property is preserved: **Layers 1-3 remain pure.** The MCP server (Layer 5) is the only new I/O boundary, and it's thin — just protocol translation between MCP messages and domain function calls.
+
+---
+
+## Deploying the MCP Server for Use Outside FP_core
+
+### The Problem
+
+FP_core's `.mcp.json` registers the MCP server at **project scope** — it only works when Claude Code is launched from within the FP_core directory. But the intended workflow is for an agent to use FP_core tools from a **separate working directory** (e.g., a workspace where CSV files live), without needing the FP_core source tree in the working directory.
+
+### The Solution: User-Scoped Registration
+
+Register the MCP server at **user scope** in `~/.claude.json` so it's available globally, regardless of which directory Claude Code is launched from.
+
+```bash
+claude mcp add-json fp_core \
+  '{"command":"/home/jarvis/Python Projects/FP_core/.venv/bin/python","args":["-m","mcp_server"],"cwd":"/home/jarvis/Python Projects/FP_core","env":{"PYTHONPATH":"/home/jarvis/Python Projects/FP_core","NEO4J_URI":"neo4j+s://<host>","NEO4J_USER":"neo4j","NEO4J_PASSWORD":"<password>"}}' \
+  --scope user
+```
+
+This produces the following entry in `~/.claude.json`:
+
+```json
+{
+  "mcpServers": {
+    "fp_core": {
+      "command": "/home/jarvis/Python Projects/FP_core/.venv/bin/python",
+      "args": ["-m", "mcp_server"],
+      "cwd": "/home/jarvis/Python Projects/FP_core",
+      "env": {
+        "PYTHONPATH": "/home/jarvis/Python Projects/FP_core",
+        "NEO4J_URI": "neo4j+s://<host>",
+        "NEO4J_USER": "neo4j",
+        "NEO4J_PASSWORD": "<password>"
+      }
+    }
+  }
+}
+```
+
+### Why Each Field Matters
+
+| Field | Value | Why |
+|-------|-------|-----|
+| `command` | Full path to venv Python | The server imports `mcp`, `neo4j`, and other dependencies installed in FP_core's virtualenv. Using the venv Python ensures the right interpreter and packages are found regardless of the caller's environment. |
+| `args` | `["-m", "mcp_server"]` | Runs the `mcp_server` package as a module, which invokes `__main__.py` → starts the FastMCP server over STDIO. |
+| `cwd` | FP_core project root | Sets the working directory so `python -m mcp_server` can find the `mcp_server/`, `domain/`, and `persistence/` packages via relative imports. Without this, the server fails to start from other directories. |
+| `env.PYTHONPATH` | FP_core project root | Ensures Python's module resolver can find `domain`, `persistence`, and `mcp_server` packages even when the process is spawned by Claude Code from a different directory. The `cwd` alone is not sufficient — `PYTHONPATH` is what makes `import domain` work reliably across all launch contexts. |
+| `env.NEO4J_URI` | Neo4j Aura connection string | The MCP server's `get_connection()` reads `os.environ.get("NEO4J_URI")` to connect. Passing it in the `env` block ensures the server finds it regardless of working directory, without depending on `load_dotenv()` locating the `.env` file. |
+| `env.NEO4J_USER` | `neo4j` (default) | Neo4j username. Passed explicitly so the server doesn't fall back to hardcoded defaults. |
+| `env.NEO4J_PASSWORD` | Aura instance password | Required for authentication. Use the password from your Neo4j Aura instance. |
+| `--scope user` | User-level config | Makes the server available in every Claude Code session, not just when launched from FP_core. Stored in `~/.claude.json` rather than `.mcp.json`. |
+
+**Note:** The Neo4j credentials are stored in plaintext in `~/.claude.json`. This is equivalent to how they're stored in the `.env` file. The `.env` file still works as a fallback when the server is launched from FP_core's directory (via `load_dotenv()`), but the `env` block in the MCP config is what makes Neo4j connectivity work from any directory.
+
+### The PYTHONPATH Discovery
+
+The initial configuration used only `cwd` without `PYTHONPATH`. This worked when Claude Code was launched from within FP_core (where `.mcp.json` also registered the server), but **failed when launched from other directories** like `fp_workspace/`. The `cwd` field sets the subprocess working directory, but Python's import system doesn't automatically add `cwd` to `sys.path` when running a module with `-m`. Adding `PYTHONPATH` explicitly ensures the FP_core packages are importable regardless of how the process is spawned.
+
+### Workspace Setup
+
+Create a dedicated workspace directory for agent sessions:
+
+```bash
+mkdir -p ~/Python\ Projects/fp_workspace
+```
+
+This is where CSV files and other data live. Launch Claude Code from here:
+
+```bash
+cd ~/Python\ Projects/fp_workspace
+claude
+```
+
+The FP_core MCP tools (`build_and_save_pipeline`, `load_recipe`, `get_processing_instructions`, `validate_entries`) are available via the user-scoped config. No FP_core files need to exist in the workspace.
+
+### Verification
+
+```bash
+# From any directory:
+claude mcp list
+# Should show: fp_core: ... ✓ Connected
+
+# From the workspace:
+cd ~/Python\ Projects/fp_workspace
+claude mcp list
+# Should also show: fp_core: ... ✓ Connected
+```
+
+### Interaction with Project-Scoped Config
+
+When Claude Code is launched from FP_core itself, both the project-scoped (`.mcp.json`) and user-scoped (`~/.claude.json`) configs define `fp_core`. Claude Code deduplicates by name — the project-scoped config takes precedence in FP_core's directory. From any other directory, only the user-scoped config applies. This means the server works correctly in both contexts without conflict.
