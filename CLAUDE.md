@@ -108,6 +108,12 @@ dogfood/
   sample_payroll_data.csv      # Sample input: 5 employees, one pay period
   payroll_journal_export.csv   # Output from run_payroll.py
   payroll_journal_output.csv   # Output from MCP-driven session
+specs/
+  template.md               # Spec template adapted for FP_core's 5-layer architecture
+  features/                  # Feature-level specs (cross-layer)
+    measure_aggregation.md   # Measure group_by/split_by/split_column through builder
+  workflows/                 # End-to-end workflow specs (eval targets)
+    build_pipeline.md        # Agent builds & saves recipe via MCP tools
 ```
 
 ### Canonical Counts
@@ -127,6 +133,37 @@ These are test-asserted — do not change without updating both code and tests:
 | `ACCOUNT_TYPE_BALANCE_MAP` | 7 | Account type → normal balance direction |
 | `MERGE_KEYS`                       | 19  | One per NodeLabel                              |
 | Total tests                        | 347 | Across 5 domain + 2 MCP + persistence test files |
+
+## Known Constraints
+
+### Measure Aggregation Properties Not Wired Through Builder
+
+**Status:** Open — domain types and ontology support these fields, but the MCP builder silently drops them.
+
+**Affected fields on `Measure`** (`domain/types_recipe.py`):
+
+| Field | Domain Type | Ontology Type | Builder Status |
+|-------|------------|---------------|----------------|
+| `group_by` | `Tuple[str, ...]` | `str` (optional) | Not read from spec |
+| `split_by` | `Optional[str]` | `str` (optional) | Not read from spec |
+| `split_column` | `Optional[str]` | `str` (optional) | Not read from spec |
+
+**What this means:**
+
+- A user *can* include `group_by`, `split_by`, or `split_column` in their JSON measure spec, but `mcp_server/builders.py:85-101` only extracts `name`, `operation`, `source_column`, and `description`. The rest is silently ignored.
+- The domain type defines `group_by` as `Tuple[str, ...]` (multiple column names), but the ontology schema declares it as `str`. A serialization convention (e.g. comma-separated) is needed to bridge the two.
+- Per-measure grouping is the intended design — `Measure("total_net")` should be able to group by `created_date` independently from `Measure("total_gross")` grouping by `deposit_date`. The graph structure supports this (each Measure is its own node with its own properties), but the pipeline spec ingestion path doesn't carry it through.
+
+**Where the gap lives:**
+
+| Layer | File | What exists | What's missing |
+|-------|------|-------------|----------------|
+| L1 Types | `domain/types_recipe.py:78-86` | `group_by: Tuple[str, ...]` on Measure dataclass | Nothing — type is correct |
+| L2 Ontology | `domain/ontology_recipe.py:109-121` | `group_by` in `_MEASURE_PROPS.optional`, typed as `str` | Tuple-to-string serialization convention |
+| L5 Builder | `mcp_server/builders.py:85-101` | Reads `name`, `operation`, `source_column`, `description` | Does not read `group_by`, `split_by`, `split_column` |
+| L5 Summarizer | `mcp_server/summarizers.py:148-171` | Resolves AGGREGATES column name | Does not emit `group_by` in processing instructions |
+
+**To resolve:** Update the builder to read these fields from the measure spec, define a serialization convention for `Tuple[str, ...] → str`, and update the summarizer to include grouping semantics in processing instructions.
 
 ## Import Patterns
 
