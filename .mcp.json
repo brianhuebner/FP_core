@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "fp_core": {
-      "command": "python",
+      "command": "/home/jarvis/Python Projects/FP_core/.venv/bin/python",
       "args": ["-m", "mcp_server"],
       "cwd": "/home/jarvis/Python Projects/FP_core"
     }

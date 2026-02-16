@@ -13,6 +13,10 @@ All domain types are **immutable** (frozen dataclasses). All validation is done 
 ## Architecture
 
 ```
+Layer 5 — MCP Server     Model Context Protocol server exposing graph to AI agents
+            |
+Layer 4 — Persistence    Neo4j adapter (serializers, deserializers, MERGE-based I/O)
+            |
 Layer 3 — Logic          Pure functions for building/validating recipe graphs
             |
 Layer 2 — Ontology       Schema definitions, constraints, validation functions
@@ -25,7 +29,7 @@ Layer 1 — Types          Enums, frozen dataclasses, graph primitives
 The domain has two sides:
 
 - **Core accounting** (7 node types): Account, Transaction, TransactionLine, Entity, AnalyticalDimension, AllocationRule, DataSource
-- **Recipe/pipeline** (9 node types): SourceSchema, Column, Measure, Condition, AccountSlot, MappingRule, AccountingRecipe, OutputFormat, OutputColumn
+- **Recipe/pipeline** (12 node types): SourceSchema, Column, Measure, Condition, AccountSlot, MappingRule, AccountingRecipe, OutputFormat, OutputColumn, Reference, ValidationRule, BatchFormat
 
 These are connected by 26 relationship types with typed constraints defining which node types can connect to which.
 
@@ -51,23 +55,35 @@ FP_core/
     types_recipe.py      Layer 1: recipe enums (ColumnDataType, SemanticRole, ...)
                          and frozen dataclasses (SourceSchema, Column, AccountSlot, ...)
     ontology.py          Layer 2: core schema definitions (PropertySchema, EntitySchema),
-                         ONTOLOGY dict (7 entries), RELATIONSHIP_CONSTRAINTS (11 entries),
-                         and 9 validation functions
-    ontology_recipe.py   Layer 2: recipe schema definitions, RECIPE_ONTOLOGY (9 entries),
-                         RECIPE_RELATIONSHIP_CONSTRAINTS (11 entries), merged_ontology(),
-                         and 5 recipe validation functions
+                         ONTOLOGY dict, RELATIONSHIP_CONSTRAINTS, and validation functions
+    ontology_recipe.py   Layer 2: recipe schema definitions, RECIPE_ONTOLOGY,
+                         RECIPE_RELATIONSHIP_CONSTRAINTS, merged_ontology(),
+                         and recipe validation functions
     logic.py             Layer 3: pure functions for building recipe graph patterns
                          and composing validation across layers
+  persistence/
+    merge_keys.py        Layer 4: NodeLabel -> MERGE identity properties
+    serializers.py       Layer 4: pure GraphPattern -> (cypher, params)
+    deserializers.py     Layer 4: pure Neo4j records -> domain objects
+    connection.py        Layer 4: Neo4jConnection wrapper
+    operations.py        Layer 4: save/load/delete/verify pattern
+  mcp_server/
+    __init__.py          Layer 5: FastMCP server instance, state, Neo4j connection
+    __main__.py          Entry point: python -m mcp_server
+    summarizers.py       Layer 5: pure functions — GraphPattern -> JSON summaries
+    tools.py             Layer 5: tool handlers (load_recipe, get_processing_instructions)
+    resources.py         Layer 5: resource handlers (ontology, constraints)
   tests/
-    domain/
-      test_types.py            Tests for core types and enums
-      test_types_recipe.py     Tests for recipe types and enums
-      test_ontology.py         Tests for core ontology and all core validators
-      test_ontology_recipe.py  Tests for recipe ontology and recipe validators
-      test_logic.py            Tests for Layer 3 logic functions
+    domain/              Layer 1-3 tests
+    persistence/         Layer 4 tests (pure + Neo4j integration)
+    mcp_server/          Layer 5 tests (pure, no Neo4j)
   docs/
-    ontology.md          Design document with full ontology rationale
-  main.py                Placeholder entry point
+    fp_core_skill.md     MCP-driven skill: guided workflows for AI agents
+    mcp_architecture.md  MCP server architecture and design decisions
+    user_flow.md         End-to-end user flow documentation
+  dogfood/
+    load_payroll.py      Builds & saves payroll recipe pipeline to Neo4j
+    run_payroll.py       Processes payroll data through recipe graph -> journal CSV
   CLAUDE.md              Claude Code development guide
 ```
 
@@ -78,28 +94,32 @@ FP_core/
 git clone <repo-url> && cd FP_core
 python3.12 -m venv .venv
 source .venv/bin/activate
-pip install pytest
+pip install pytest neo4j mcp[cli]
 
-# Run tests
+# Run tests (domain + persistence pure tests + MCP server tests)
 pytest
-# Expected: 158 passed
+# Expected: 197 passed
+
+# Integration tests (requires Neo4j)
+NEO4J_URI=bolt://localhost:7687 NEO4J_PASSWORD=your_password pytest tests/persistence/test_operations.py
+
+# Run MCP server
+python -m mcp_server
 ```
 
-No `pyproject.toml` or formal packaging yet. The only dependency beyond stdlib is pytest.
+No `pyproject.toml` or formal packaging yet. Dependencies beyond stdlib: pytest, neo4j>=5.0, mcp[cli].
 
 ## Project Status
 
-**What exists (Layers 1-3):**
-- Complete type system with 16 node types and 26 relationship types
+**What exists (Layers 1-5):**
+- Complete type system with 19 node types and 26 relationship types
 - Full ontology with schema definitions and typed constraints
-- 14 validation functions (9 core + 5 recipe) covering balance enforcement, property validation, relationship constraints, and recipe completeness
+- Validation functions covering balance enforcement, property validation, relationship constraints, and recipe completeness
 - Pure logic functions for building and validating recipe graph patterns
-- 158 tests across 5 test files
-
-**What's next:**
-- Layer 4 — Neo4j adapter (graph persistence)
-- Layer 5 — Services (use cases, orchestration)
-- Layer 6 — API (external interface)
+- Neo4j persistence layer with MERGE-based idempotent writes, serializers, and deserializers
+- MCP server exposing the knowledge graph to AI agents with recipe loading and processing instruction tools
+- 197 tests across domain, persistence, and MCP server test files
+- Dogfood examples: end-to-end payroll recipe pipeline
 
 ## Key Invariants
 
@@ -110,5 +130,7 @@ No `pyproject.toml` or formal packaging yet. The only dependency beyond stdlib i
 
 ## Design Documents
 
-- **`docs/ontology.md`** — Full design rationale including node type definitions, relationship semantics, validation strategy, traceability patterns, and implementation phases.
+- **`docs/fp_core_skill.md`** — MCP-driven skill file: guided workflows for AI agents using MCP tools.
+- **`docs/mcp_architecture.md`** — MCP server architecture and design decisions.
+- **`docs/user_flow.md`** — End-to-end user flow documentation.
 - **`CLAUDE.md`** — Claude Code development guide with file map, architecture summary, canonical counts, and extension patterns.

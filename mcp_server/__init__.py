@@ -50,9 +50,10 @@ def get_connection():
     return _connection
 
 
-# Register tool and resource handlers by importing their modules
+# Register tool, resource, and prompt handlers by importing their modules
 import mcp_server.tools  # noqa: E402, F401
 import mcp_server.resources  # noqa: E402, F401
+import mcp_server.prompts  # noqa: E402, F401
 
 
 def main():
