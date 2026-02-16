@@ -31,6 +31,7 @@ pytest tests/domain/test_ontology.py::TestValidateTransactionBalance::test_balan
 
 # Layer 5 MCP server tests (pure, no Neo4j needed)
 pytest tests/mcp_server/test_summarizers.py
+pytest tests/mcp_server/test_builders.py
 
 # Integration tests (requires NEO4J_URI, NEO4J_PASSWORD env vars)
 pytest tests/persistence/test_operations.py
@@ -73,12 +74,15 @@ tests/
     test_operations.py     # Integration tests (skipped without NEO4J_URI)
   mcp_server/
     __init__.py            # Empty package marker
+    test_builders.py       # Layer 5 builder tests (pure, no Neo4j)
     test_summarizers.py    # Layer 5 summarizer tests (pure, no Neo4j)
 mcp_server/
   __init__.py          # Layer 5: FastMCP server instance, state, Neo4j connection
   __main__.py          # Entry point: python -m mcp_server
+  builders.py          # Layer 5: pure functions — JSON pipeline spec → domain objects
   summarizers.py       # Layer 5: pure functions — GraphPattern → JSON-serializable dicts
-  tools.py             # Layer 5: Tier 1 tool handlers (load_recipe, get_processing_instructions)
+  tools.py             # Layer 5: Tier 1 tool handlers (4 tools: load, instructions, build+save, validate)
+  prompts.py           # Layer 5: MCP prompt workflow templates (build-pipeline, process-data, gate2-checklist)
   resources.py         # Layer 5: resource handlers (ontology://merged, constraints://merged)
 docs/
   fp_core_skill.md     # MCP-driven skill: guided workflows for AI agents using MCP tools
@@ -103,7 +107,7 @@ dogfood/
 
 **Layer 4 — Persistence** (`persistence/`): Neo4j I/O layer. `domain/` stays pure — zero I/O imports. `merge_keys.py` maps NodeLabel to MERGE identity properties. `serializers.py` and `deserializers.py` are pure functions (testable without Neo4j). Only `connection.py` imports the `neo4j` driver. `operations.py` composes serializers + connection for save/load/delete. Uses MERGE for idempotent writes. `Node.id` round-trips via a `_node_id` property stored in Neo4j.
 
-**Layer 5 — MCP Server** (`mcp_server/`): Model Context Protocol server exposing the knowledge graph to AI agents. `summarizers.py` contains pure functions that transform `GraphPattern` into JSON-serializable dicts — the bulk of new logic, fully testable without Neo4j. `tools.py` provides two Tier 1 coarse-grained read tools: `load_recipe` (loads a recipe graph from Neo4j and caches it) and `get_processing_instructions` (extracts measures, rules with resolved accounts, output spec from cache). `resources.py` exposes `ontology://merged` and `constraints://merged` as MCP resources. Server-side state in `__init__.py` caches loaded `GraphPattern` objects so an agent can load once, then query. Runs over STDIO transport (`python -m mcp_server`).
+**Layer 5 — MCP Server** (`mcp_server/`): Model Context Protocol server exposing the knowledge graph to AI agents. `builders.py` contains pure functions that convert JSON pipeline specs into domain objects (the inverse of summarizers). `summarizers.py` contains pure functions that transform `GraphPattern` into JSON-serializable dicts. `tools.py` provides four Tier 1 tools: `load_recipe` (loads from Neo4j + caches), `get_processing_instructions` (extracts measures/rules/output), `build_and_save_pipeline` (builds graph from spec, runs Gate 1 validators, saves), and `validate_entries` (runs Gate 2 balance + account checks). `prompts.py` provides three workflow templates: `build-pipeline`, `process-data`, `gate2-checklist`. `resources.py` exposes `ontology://merged` and `constraints://merged` as MCP resources. Server-side state in `__init__.py` caches loaded `GraphPattern` objects. Runs over STDIO transport (`python -m mcp_server`).
 
 **Public API** (`domain/__init__.py`): Re-exports everything from all layers via `__all__`. Import from `domain` directly. Persistence has its own package: import from `persistence`.
 
@@ -123,7 +127,7 @@ These are test-asserted — do not change without updating both code and tests:
 | `merged_relationship_constraints()` | 25 | All constraints combined |
 | `ACCOUNT_TYPE_BALANCE_MAP` | 7 | Account type → normal balance direction |
 | `MERGE_KEYS`                       | 19  | One per NodeLabel                              |
-| Total tests                        | 197 | Across 5 domain test files (+ persistence)     |
+| Total tests                        | 347 | Across 5 domain + 2 MCP + persistence test files |
 
 ## Key Design Constraints
 

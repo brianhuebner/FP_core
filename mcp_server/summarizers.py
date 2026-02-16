@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from domain.types import GraphPattern, Node, NodeLabel, RelationshipType
+from domain.ontology import ValidationResult
 from domain.logic import (
     extract_batch_format,
     extract_debit_credit_slots,
@@ -232,3 +233,61 @@ def summarize_processing_instructions(
         result["output_format"] = output_section
 
     return result
+
+
+# ============================================================================
+# Build & Validation result summarizers
+# ============================================================================
+
+def summarize_build_result(
+    validation_result: ValidationResult,
+    save_counts: List[Dict[str, int]] | None,
+    recipe_id: str,
+    pattern: GraphPattern | None,
+) -> Dict[str, Any]:
+    """Summarize the result of build_and_save_pipeline for the tool response."""
+    result: Dict[str, Any] = {
+        "recipe_id": recipe_id,
+        "gate1_validation": {
+            "is_valid": validation_result.is_valid,
+            "errors": list(validation_result.errors),
+            "warnings": list(validation_result.warnings),
+        },
+    }
+
+    if not validation_result.is_valid or save_counts is None:
+        result["saved"] = False
+        result["counts"] = None
+        return result
+
+    total_nodes = sum(r.get("nodes_created", 0) for r in save_counts)
+    total_rels = sum(r.get("relationships_created", 0) for r in save_counts)
+    total_props = sum(r.get("properties_set", 0) for r in save_counts)
+
+    result["saved"] = True
+    result["counts"] = {
+        "nodes": len(pattern.nodes) if pattern else 0,
+        "relationships": len(pattern.relationships) if pattern else 0,
+        "nodes_created": total_nodes,
+        "relationships_created": total_rels,
+        "properties_set": total_props,
+    }
+    return result
+
+
+def summarize_validation_result(
+    entries_results: List[Dict[str, Any]],
+    account_results: List[Dict[str, Any]],
+    merged: ValidationResult,
+) -> Dict[str, Any]:
+    """Summarize the result of validate_entries for the tool response."""
+    return {
+        "gate2_validation": {
+            "is_valid": merged.is_valid,
+            "errors": list(merged.errors),
+            "warnings": list(merged.warnings),
+            "entries_checked": len(entries_results),
+            "accounts_checked": len(account_results),
+        },
+        "entry_details": entries_results,
+    }

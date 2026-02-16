@@ -7,14 +7,17 @@ that the summarizer functions extract the correct structure.
 import pytest
 
 from domain.types import GraphPattern, Node, NodeLabel, Relationship, RelationshipType
+from domain.ontology import ValidationResult
 from mcp_server.summarizers import (
     _find_nodes_by_label,
     _find_related_nodes,
     _find_single_node_by_label,
     _prop,
     _resolve_account_for_slot,
+    summarize_build_result,
     summarize_processing_instructions,
     summarize_recipe_load,
+    summarize_validation_result,
 )
 
 RECIPE_ID = "payroll_monthly_v1"
@@ -586,3 +589,105 @@ class TestSummarizeProcessingInstructions:
         output = result["output_format"]
         assert "batch" not in output
         assert len(output["columns"]) == 1
+
+
+# ============================================================================
+# TestSummarizeBuildResult
+# ============================================================================
+
+class TestSummarizeBuildResult:
+    def test_valid_build_with_save_counts(self, pipeline):
+        vr = ValidationResult.success(warnings=("Slot orphan has no MAPPED_TO",))
+        save_counts = [
+            {"nodes_created": 10, "relationships_created": 15, "properties_set": 80},
+            {"nodes_created": 5, "relationships_created": 5, "properties_set": 30},
+        ]
+        result = summarize_build_result(vr, save_counts, RECIPE_ID, pipeline)
+
+        assert result["recipe_id"] == RECIPE_ID
+        assert result["gate1_validation"]["is_valid"] is True
+        assert result["gate1_validation"]["warnings"] == ["Slot orphan has no MAPPED_TO"]
+        assert result["saved"] is True
+        assert result["counts"]["nodes"] == len(pipeline.nodes)
+        assert result["counts"]["relationships"] == len(pipeline.relationships)
+        assert result["counts"]["nodes_created"] == 15
+        assert result["counts"]["relationships_created"] == 20
+        assert result["counts"]["properties_set"] == 110
+
+    def test_failed_validation_no_save(self, pipeline):
+        vr = ValidationResult.failure(("Missing TRANSFORMS",), ("Some warning",))
+        result = summarize_build_result(vr, None, RECIPE_ID, pipeline)
+
+        assert result["recipe_id"] == RECIPE_ID
+        assert result["gate1_validation"]["is_valid"] is False
+        assert result["gate1_validation"]["errors"] == ["Missing TRANSFORMS"]
+        assert result["saved"] is False
+        assert result["counts"] is None
+
+    def test_no_warnings_no_errors(self, pipeline):
+        vr = ValidationResult.success()
+        save_counts = [{"nodes_created": 1, "relationships_created": 0, "properties_set": 5}]
+        result = summarize_build_result(vr, save_counts, RECIPE_ID, pipeline)
+
+        assert result["gate1_validation"]["errors"] == []
+        assert result["gate1_validation"]["warnings"] == []
+        assert result["saved"] is True
+
+
+# ============================================================================
+# TestSummarizeValidationResult
+# ============================================================================
+
+class TestSummarizeValidationResult:
+    def test_valid_entries(self):
+        entries_results = [
+            {"entry_index": 0, "is_valid": True, "debit_total": "24500.00", "credit_total": "24500.00"},
+            {"entry_index": 1, "is_valid": True, "debit_total": "6125.00", "credit_total": "6125.00"},
+        ]
+        account_results = [
+            {"account_code": "6100", "is_active": True},
+            {"account_code": "2100", "is_active": True},
+        ]
+        merged = ValidationResult.success()
+        result = summarize_validation_result(entries_results, account_results, merged)
+
+        assert result["gate2_validation"]["is_valid"] is True
+        assert result["gate2_validation"]["entries_checked"] == 2
+        assert result["gate2_validation"]["accounts_checked"] == 2
+        assert len(result["entry_details"]) == 2
+
+    def test_unbalanced_entry(self):
+        entries_results = [
+            {"entry_index": 0, "is_valid": False, "debit_total": "100.00", "credit_total": "50.00"},
+        ]
+        merged = ValidationResult.failure(
+            ("Transaction is unbalanced: debits=100.00, credits=50.00",),
+        )
+        result = summarize_validation_result(entries_results, [], merged)
+
+        assert result["gate2_validation"]["is_valid"] is False
+        assert len(result["gate2_validation"]["errors"]) == 1
+        assert result["gate2_validation"]["entries_checked"] == 1
+        assert result["gate2_validation"]["accounts_checked"] == 0
+
+    def test_inactive_account_warning(self):
+        entries_results = [
+            {"entry_index": 0, "is_valid": True, "debit_total": "100.00", "credit_total": "100.00"},
+        ]
+        account_results = [
+            {"account_code": "6100", "is_active": False},
+        ]
+        merged = ValidationResult.failure(("Cannot post to inactive account",))
+        result = summarize_validation_result(entries_results, account_results, merged)
+
+        assert result["gate2_validation"]["is_valid"] is False
+        assert result["gate2_validation"]["accounts_checked"] == 1
+
+    def test_empty_entries(self):
+        merged = ValidationResult.success()
+        result = summarize_validation_result([], [], merged)
+
+        assert result["gate2_validation"]["is_valid"] is True
+        assert result["gate2_validation"]["entries_checked"] == 0
+        assert result["gate2_validation"]["accounts_checked"] == 0
+        assert result["entry_details"] == []
