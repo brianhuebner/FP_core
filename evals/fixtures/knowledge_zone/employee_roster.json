@@ -1,0 +1,7 @@
+[
+  {"employee_id": "E001", "name": "Jane Smith", "department": "Engineering", "cost_center": "CC100"},
+  {"employee_id": "E002", "name": "Carlos Rivera", "department": "Marketing", "cost_center": "CC200"},
+  {"employee_id": "E003", "name": "Aisha Patel", "department": "Engineering", "cost_center": "CC100"},
+  {"employee_id": "E004", "name": "Marcus Chen", "department": "Sales", "cost_center": "CC300"},
+  {"employee_id": "E005", "name": "Sarah Kim", "department": "Operations", "cost_center": "CC400"}
+]

@@ -1,0 +1,6 @@
+employee_id,pay_date,gross_pay,tax_withheld,net_pay,department
+E001,2026-02-28,5500.00,1375.00,4125.00,Engineering
+E002,2026-02-28,4200.00,1050.00,3150.00,Marketing
+E003,2026-02-28,6800.00,1700.00,5100.00,Engineering
+E004,2026-02-28,3700.00,925.00,2775.00,Sales
+E005,2026-02-28,4600.00,1150.00,3450.00,Operations

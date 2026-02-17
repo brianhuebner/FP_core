@@ -1,0 +1,8 @@
+[
+  {"code": "1010", "name": "Cash", "account_type": "asset", "normal_balance": "debit"},
+  {"code": "2100", "name": "Payroll Payable", "account_type": "liability", "normal_balance": "credit"},
+  {"code": "2200", "name": "Tax Payable", "account_type": "liability", "normal_balance": "credit"},
+  {"code": "6100", "name": "Salary Expense", "account_type": "expense", "normal_balance": "debit"},
+  {"code": "6200", "name": "Benefits Expense", "account_type": "expense", "normal_balance": "debit"},
+  {"code": "2300", "name": "Benefits Payable", "account_type": "liability", "normal_balance": "credit"}
+]
