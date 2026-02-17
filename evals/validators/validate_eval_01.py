@@ -188,18 +188,32 @@ def validate(recipe_id: str, results_dir: str) -> dict:
     }
 
     # --- Check: First-attempt success (from agent output) ---
+    # The agent transcript from `claude --print` contains final text, not raw
+    # tool call names. Check for both literal tool names and semantic evidence.
     agent_output_path = results_path / "eval_01_agent_output.txt"
     first_attempt = True
     ontology_consulted = False
     if agent_output_path.exists():
         agent_text = agent_output_path.read_text()
-        # Count build_and_save_pipeline calls
+        agent_text_lower = agent_text.lower()
+        # Count build_and_save_pipeline calls or retry evidence
         build_calls = agent_text.count("build_and_save_pipeline")
-        if build_calls > 1:
+        retry_evidence = (
+            "retry" in agent_text_lower
+            or "failed validation" in agent_text_lower
+            or "fix" in agent_text_lower and "error" in agent_text_lower
+        )
+        if build_calls > 1 or retry_evidence:
             first_attempt = False
         # Check ontology was read before build
-        ontology_pos = agent_text.find("ontology://merged")
-        build_pos = agent_text.find("build_and_save_pipeline")
+        ontology_pos = max(
+            agent_text.find("ontology://merged"),
+            agent_text_lower.find("ontology"),
+        )
+        build_pos = max(
+            agent_text.find("build_and_save_pipeline"),
+            agent_text_lower.find("pipeline"),
+        )
         if ontology_pos >= 0 and build_pos >= 0 and ontology_pos < build_pos:
             ontology_consulted = True
 

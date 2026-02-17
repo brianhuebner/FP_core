@@ -30,6 +30,13 @@ if ! command -v claude &> /dev/null; then
     exit 1
 fi
 
+# Activate virtualenv
+PYTHON="$PROJECT_ROOT/.venv/bin/python"
+if [ ! -f "$PYTHON" ]; then
+    echo "ERROR: virtualenv not found at $PROJECT_ROOT/.venv"
+    exit 1
+fi
+
 mkdir -p "$RESULTS_DIR"
 echo "Results directory: $RESULTS_DIR"
 echo ""
@@ -59,7 +66,7 @@ run_eval_01() {
 
     # Validate
     echo "  Running validator..."
-    python "$SCRIPT_DIR/validators/validate_eval_01.py" "$RECIPE_ID" "$RESULTS_DIR"
+    "$PYTHON" "$SCRIPT_DIR/validators/validate_eval_01.py" "$RECIPE_ID" "$RESULTS_DIR"
 }
 
 # ─────────────────────────────────────────────────────────────
@@ -76,7 +83,7 @@ run_eval_02() {
 
     # Setup: load recipe into Neo4j
     echo "  Loading recipe into Neo4j..."
-    python "$SCRIPT_DIR/setup_eval_02.py" "$RECIPE_ID"
+    "$PYTHON" "$SCRIPT_DIR/setup_eval_02.py" "$RECIPE_ID"
     echo ""
 
     # Read prompt
@@ -97,7 +104,7 @@ run_eval_02() {
 
     # Validate
     echo "  Running validator..."
-    python "$SCRIPT_DIR/validators/validate_eval_02.py" "$RESULTS_DIR"
+    "$PYTHON" "$SCRIPT_DIR/validators/validate_eval_02.py" "$RESULTS_DIR"
 }
 
 # ─────────────────────────────────────────────────────────────

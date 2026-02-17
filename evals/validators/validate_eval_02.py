@@ -193,13 +193,22 @@ def validate(results_dir: str) -> dict:
     }
 
     # --- Check: Gate 2 invoked (from agent output) ---
+    # The agent transcript from `claude --print` contains final text, not raw
+    # tool call names. Check for both literal tool names and semantic evidence.
     agent_output_path = results_path / "eval_02_agent_output.txt"
     gate2_invoked = False
     processing_instructions_used = False
     if agent_output_path.exists():
-        agent_text = agent_output_path.read_text()
-        gate2_invoked = "validate_entries" in agent_text
-        processing_instructions_used = "get_processing_instructions" in agent_text
+        agent_text = agent_output_path.read_text().lower()
+        gate2_invoked = (
+            "validate_entries" in agent_text
+            or "gate 2" in agent_text
+            or "gate2" in agent_text
+        )
+        processing_instructions_used = (
+            "get_processing_instructions" in agent_text
+            or "processing instructions" in agent_text
+        )
 
     report["checks"]["gate2_invoked"] = {"pass": gate2_invoked}
     report["checks"]["processing_instructions_used"] = {"pass": processing_instructions_used}
