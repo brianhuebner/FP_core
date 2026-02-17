@@ -37,6 +37,9 @@ if [ ! -f "$PYTHON" ]; then
     exit 1
 fi
 
+# Pre-authorize MCP tools and file operations for non-interactive agent runs
+ALLOWED_TOOLS="mcp__fp_core__load_recipe mcp__fp_core__get_processing_instructions mcp__fp_core__build_and_save_pipeline mcp__fp_core__validate_entries Read Write Glob"
+
 mkdir -p "$RESULTS_DIR"
 echo "Results directory: $RESULTS_DIR"
 echo ""
@@ -59,6 +62,7 @@ run_eval_01() {
     echo "  Invoking agent..."
     claude --print -p "$PROMPT" \
         --mcp-config "$MCP_CONFIG" \
+        --allowedTools $ALLOWED_TOOLS \
         > "$RESULTS_DIR/eval_01_agent_output.txt" 2>&1 || true
 
     echo "  Agent output saved to: $RESULTS_DIR/eval_01_agent_output.txt"
@@ -92,6 +96,7 @@ run_eval_02() {
     echo "  Invoking agent..."
     claude --print -p "$PROMPT" \
         --mcp-config "$MCP_CONFIG" \
+        --allowedTools $ALLOWED_TOOLS \
         > "$RESULTS_DIR/eval_02_agent_output.txt" 2>&1 || true
 
     echo "  Agent output saved to: $RESULTS_DIR/eval_02_agent_output.txt"
