@@ -2,12 +2,12 @@
 
 ## 1. Purpose & When to Use This Skill
 
-You have an FP_core MCP server connected. This skill guides you through interacting with the accounting knowledge graph via MCP tools — loading recipes, processing data, and producing journal entries.
+You have an FP_core MCP server connected. This skill guides you through interacting with the accounting knowledge graph via MCP tools — loading recipes, building new pipelines, processing data, and producing journal entries.
 
 **Use this skill when:**
+- Building a new recipe pipeline from a JSON spec
 - Processing source data (CSV) through a recipe pipeline to produce journal entries
 - Inspecting a recipe's structure, rules, and output specification
-- Building a new recipe (future — Tier 2 tools)
 - Answering questions about the accounting domain model
 
 **Don't use this skill when:**
@@ -18,32 +18,20 @@ You have an FP_core MCP server connected. This skill guides you through interact
 
 ## 2. Available MCP Tools & Resources
 
-### Tier 1 — Coarse-Grained Read Tools (available now)
+### Tier 1 — Core Tools (always available)
 
 | Tool | Parameters | Purpose |
 |---|---|---|
 | `load_recipe` | `recipe_id: str` | Load a recipe graph from Neo4j, cache it, return a structural summary |
-| `get_processing_instructions` | `recipe_id: str` | Extract measures, mapping rules with resolved accounts, and output spec from cache |
+| `load_format` | `format_id: str` | Load an output format from Neo4j, cache it, return a summary |
+| `get_processing_instructions` | `recipe_id: str`, `format_id: str` (optional) | Extract measures, mapping rules with resolved accounts, and output spec from cache |
+| `build_and_save_pipeline` | `pipeline_spec: str` (JSON) | Build a recipe from a JSON spec, run Gate 1 validation, save to Neo4j |
+| `build_output` | `output_spec: str` (JSON) | Build an output format from a JSON spec, validate, save to Neo4j |
+| `validate_entries` | `entries: str` (JSON), `recipe_id: str` (optional) | Validate journal entries against double-entry rules (Gate 2) |
 
-**Calling sequence:** Always call `load_recipe` before `get_processing_instructions`. The server caches the graph on load; instructions are derived from the cache.
+**Calling sequence for processing data:** `load_recipe` → `get_processing_instructions` → compute → `validate_entries`
 
-### Tier 2 — Fine-Grained Write Tools (planned, Phase 2)
-
-These tools will be added in a future phase:
-- `build_schema` — define source file structure
-- `build_recipe` — create accounting recipe with mapping rules
-- `build_output` — define output format specification
-- `save_pipeline` — validate and persist a complete pipeline
-- `validate_pipeline` — run Gate 1 validation without saving
-
-> Do not attempt to call Tier 2 tools — they are not yet registered.
-
-### Tier 3 — Raw Cypher (planned, Phase 3)
-
-- `run_cypher` — execute ad-hoc Cypher queries against Neo4j
-- For Cypher query patterns, see `docs/outline_skill.md`
-
-> Do not attempt to call Tier 3 tools — they are not yet registered.
+**Calling sequence for building a recipe:** `build_and_save_pipeline` → `load_recipe` → `get_processing_instructions` (verify round-trip)
 
 ### Resources
 
@@ -52,13 +40,173 @@ These tools will be added in a future phase:
 | `ontology://merged` | Full merged ontology (19 entity schemas with property schemas and relationship constraints) |
 | `constraints://merged` | All 25 relationship constraints mapping each RelationshipType to allowed (source, target) pairs |
 
-Resources are read-only reference data. Use them to understand what node types, properties, and relationships exist in the domain model.
+Resources are read-only reference data. Read `ontology://merged` before building a spec to understand required vs. optional properties for each node type.
 
 ---
 
-## 3. User Journey: Process Data Through a Recipe
+## 3. User Journey: Build a New Recipe Pipeline
 
-This is the primary workflow — taking source data and producing accounting journal entries.
+### Step 1: Read the ontology
+
+```
+Resource: ontology://merged
+```
+
+Read this before writing any spec. It shows required and optional properties for each node type (`SourceSchema`, `Column`, `Measure`, `AccountingRecipe`, `MappingRule`, `AccountSlot`, `Account`, `Condition`, etc.).
+
+### Step 2: Build the spec
+
+Construct a JSON object matching the pipeline spec shape below, then call:
+
+```
+Tool: build_and_save_pipeline
+Args: pipeline_spec = "<JSON string>"
+```
+
+### Pipeline spec shape
+
+```json
+{
+  "recipe_id": "my_payroll_v1",
+  "schema": {
+    "name": "payroll_export",
+    "source_system": "csv_import",
+    "columns": [
+      {"name": "gross_pay",   "position": 1, "data_type": "decimal", "role": "amount"},
+      {"name": "tax_withheld","position": 2, "data_type": "decimal", "role": "amount"},
+      {"name": "net_pay",     "position": 3, "data_type": "decimal", "role": "amount"},
+      {"name": "department",  "position": 4, "data_type": "string",  "role": "category"}
+    ],
+    "measures": [
+      {"name": "total_gross",   "operation": "sum", "source_column": "gross_pay"},
+      {"name": "total_tax",     "operation": "sum", "source_column": "tax_withheld"},
+      {"name": "total_net",     "operation": "sum", "source_column": "net_pay"}
+    ]
+  },
+  "recipe": {
+    "name": "Payroll Journal",
+    "conditions": [
+      {
+        "condition_id": "is_engineering",
+        "column": "department",
+        "operator": "equals",
+        "value": "Engineering"
+      }
+    ],
+    "rules": [
+      {
+        "rule_name": "gross_pay_entry",
+        "source_measure": "total_gross",
+        "priority": 1,
+        "memo_template": "Gross pay accrual",
+        "debit":  {"slot_id": "salary_dr",  "role": "expense",   "account_code": "6100", "account_name": "Salary Expense",  "account_type": "expense",   "normal_balance": "debit"},
+        "credit": {"slot_id": "payroll_cr", "role": "liability", "account_code": "2200", "account_name": "Payroll Payable", "account_type": "liability", "normal_balance": "credit"}
+      },
+      {
+        "rule_name": "benefits_accrual",
+        "source_measure": "total_gross",
+        "priority": 2,
+        "when": "is_engineering",
+        "memo_template": "Benefits accrual - Engineering",
+        "debit":  {"slot_id": "benefits_dr", "role": "expense",   "account_code": "6200", "account_name": "Benefits Expense",  "account_type": "expense",   "normal_balance": "debit"},
+        "credit": {"slot_id": "benefits_cr", "role": "liability", "account_code": "2300", "account_name": "Benefits Payable", "account_type": "liability", "normal_balance": "credit"}
+      }
+    ]
+  }
+}
+```
+
+### Field reference
+
+**Top level**
+| Field | Required | Notes |
+|---|---|---|
+| `recipe_id` | Yes | Unique identifier for this pipeline. Used as the primary key in Neo4j. |
+| `schema` | Yes | Describes the source data file structure. |
+| `recipe` | Yes | Declares the accounting mapping logic. |
+
+**`schema`**
+| Field | Required | Notes |
+|---|---|---|
+| `name` | Yes | Human-readable name for the schema. |
+| `source_system` | Yes | Origin system. Common value: `"csv_import"`. |
+| `columns[]` | Yes | List of column definitions. |
+| `measures[]` | Yes | List of measure (aggregation) definitions. |
+
+**`schema.columns[]`**
+| Field | Required | Valid values |
+|---|---|---|
+| `name` | Yes | Must match column header in source CSV. |
+| `position` | Yes | 1-based integer column position. |
+| `data_type` | Yes | `"string"`, `"decimal"`, `"date"`, `"integer"`, `"boolean"` |
+| `role` | Yes | `"identifier"`, `"amount"`, `"date"`, `"category"`, `"text"` |
+
+**`schema.measures[]`**
+| Field | Required | Valid values |
+|---|---|---|
+| `name` | Yes | Identifier used in `rule.source_measure`. |
+| `operation` | Yes | `"sum"`, `"count"`, `"avg"`, `"min"`, `"max"` |
+| `source_column` | Yes | Must match a column `name` in `schema.columns`. |
+| `group_by` | No | List of column names to group by before aggregating. |
+
+**`recipe`**
+| Field | Required | Notes |
+|---|---|---|
+| `name` | Yes | Human-readable recipe name. |
+| `conditions[]` | No | Condition definitions for conditional rules. See below. |
+| `rules[]` | Yes | Mapping rules that produce journal entries. |
+
+**`recipe.conditions[]`**
+| Field | Required | Valid values |
+|---|---|---|
+| `condition_id` | Yes | Referenced by `rule.when`. Unique within this recipe. |
+| `column` | Yes | Source column name to evaluate. |
+| `operator` | Yes | `"equals"`, `"not_equals"`, `"greater_than"`, `"less_than"`, `"is_null"`, `"is_not_null"`, `"always"` |
+| `value` | No | Comparison value (string). Omit for `is_null`, `is_not_null`, `always`. |
+
+**`recipe.rules[]`**
+| Field | Required | Notes |
+|---|---|---|
+| `rule_name` | Yes | Unique identifier for this rule within the recipe. |
+| `source_measure` | Yes | Must match a measure `name` in `schema.measures`. |
+| `priority` | No | Integer. Lower fires first. |
+| `memo_template` | No | Memo string for generated journal entries. |
+| `when` | No | A `condition_id` from `recipe.conditions`. Rule fires only when condition is true. |
+| `debit` | Yes | A single dict (not a list) describing the debit account slot. |
+| `credit` | Yes | A single dict (not a list) describing the credit account slot. |
+
+**`rule.debit` / `rule.credit`** — each is a single dict object:
+| Field | Required | Valid values |
+|---|---|---|
+| `slot_id` | Yes | Unique across all rules in the recipe. |
+| `role` | Yes | Semantic role, e.g. `"expense"`, `"liability"`, `"asset"`, `"revenue"`. |
+| `account_code` | Yes | Must match an account in the chart of accounts. |
+| `account_name` | Yes | Display name for the account. |
+| `account_type` | Yes | `"asset"`, `"liability"`, `"equity"`, `"expense"`, `"revenue"` |
+| `normal_balance` | Yes | `"debit"` or `"credit"` |
+
+### Step 3: Handle Gate 1 validation errors
+
+If the response contains `"gate1_validation": {"is_valid": false}`, read the `errors` list and fix the spec. Common errors:
+- Missing required field → add it
+- `source_measure` doesn't match any measure name → check spelling
+- Duplicate `slot_id` → make each slot_id unique across all rules
+- Dangling WHEN target → ensure `rule.when` matches a `condition_id` in `recipe.conditions`
+
+### Step 4: Verify the round-trip
+
+After a successful save:
+
+```
+Tool: load_recipe      → recipe_id="my_payroll_v1"
+Tool: get_processing_instructions → recipe_id="my_payroll_v1"
+```
+
+Confirm the returned measures and rules match what you specified. If a rule has a `when` condition, it should appear as a `"conditions"` list in the rule's processing instructions entry.
+
+---
+
+## 4. User Journey: Process Data Through a Recipe
 
 ### Step 1: Load the recipe
 
@@ -69,11 +217,9 @@ Args: recipe_id = "<recipe_id>"
 
 **What you get back:** A JSON summary containing:
 - `graph_structure` — node and relationship counts
-- `schema` — source file structure (name, file_pattern, row_grain, columns with positions and data types)
-- `recipe` — accounting recipe name, journal number format, batch key, and rule summaries (name, source_measure, priority, memo_template)
-- `output` — output format name, target system, file format, and column positions
-
-**What to do:** Read the schema section to understand what columns exist in the source data. Note the `row_grain` — it tells you what each row represents (e.g., "one row per employee per pay period").
+- `schema` — source file structure (name, columns with positions and data types)
+- `recipe` — recipe name and rule summaries (name, source_measure, priority, has_condition)
+- `output` — output format summary (if attached to recipe)
 
 ### Step 2: Get processing instructions
 
@@ -82,105 +228,61 @@ Tool: get_processing_instructions
 Args: recipe_id = "<recipe_id>"
 ```
 
-**What you get back:** A JSON with:
-- `measures` — what to compute from the source data:
-  - `name` — measure identifier (e.g., "total_gross_pay")
-  - `operation` — aggregation type (e.g., "SUM", "COUNT")
-  - `column` — which source column to aggregate
-- `rules` — mapping rules that produce journal entries:
-  - `priority` — execution order (lower = first)
-  - `name` — rule identifier
-  - `source_measure` — which measure this rule uses as its amount
-  - `memo_template` — template string for the journal entry memo
-  - `debits` — list of `{account_code, account_name}` to debit
-  - `credits` — list of `{account_code, account_name}` to credit
-- `output_format` — how to structure the output:
-  - `columns` — ordered output columns with positions
-  - `validation_rules` — rules to check before writing (e.g., debits == credits)
-  - `batch` — grouping and separator info (if applicable)
-
-**What to do:** This is the instruction set. You now have everything needed to process the data.
+**What you get back:**
+- `measures` — what to compute: `name`, `operation`, `column`
+- `rules` — mapping rules with resolved accounts:
+  - `priority`, `name`, `source_measure`, `memo_template`
+  - `debits` — list of `{account_code, account_name}`
+  - `credits` — list of `{account_code, account_name}`
+  - `conditions` — list of `{condition_id, column, operator, value}` (only present if rule has a WHEN condition)
 
 ### Step 3: Read the source data
 
-Read the source CSV file. Match the columns to the schema from Step 1. Verify the columns are present and the data types are compatible.
+Read the source CSV. Match columns to the schema from Step 1.
 
 ### Step 4: Compute measures
 
-For each measure in the processing instructions:
+For each measure: apply `operation` to the `column` across all qualifying rows.
 
-1. Identify the source column (from `measure.column`)
-2. Apply the operation (from `measure.operation`):
-   - `SUM` — sum all values in the column
-   - `COUNT` — count the rows
-3. Store the result keyed by the measure name
-
-**Example:**
-If `measures` says `{name: "total_gross_pay", operation: "SUM", column: "gross_pay"}`, then compute the sum of the `gross_pay` column across all rows.
+If a rule has `conditions`, only include rows where the condition is true when computing that rule's amount. For example, a rule with `WHEN department = "Engineering"` should aggregate only rows where `department == "Engineering"`.
 
 ### Step 5: Generate journal entries
 
 For each rule (in priority order):
-
 1. Look up the measure value using `rule.source_measure`
-2. For each debit account in `rule.debits`:
-   - Create a journal line: direction = DEBIT, amount = measure value, account = `account_code`
-3. For each credit account in `rule.credits`:
-   - Create a journal line: direction = CREDIT, amount = measure value, account = `account_code`
-4. Render the memo using `rule.memo_template` (substitute variables like `{period}`, `{batch_key}`)
+2. If the rule has `conditions`, skip it if the condition was not met
+3. Create journal lines for each debit and credit account
 
-### Step 6: Validate (Gate 2 — transaction-level)
+### Step 6: Validate (Gate 2)
 
-Before writing output, check:
+```
+Tool: validate_entries
+Args: entries = "<JSON array of entries>", recipe_id = "<recipe_id>"
+```
 
-1. **Debits must equal credits** — for each journal entry, total debit amounts must equal total credit amounts. This is a hard invariant; do not proceed if unbalanced.
-2. **Accounts are active** — all account codes referenced in the rules should be active (`is_active: true`). The recipe's resolved accounts come pre-validated, but if you've modified anything, re-check.
-3. **Validation rules from output_format** — apply each rule from `output_format.validation_rules`. Common rules:
-   - `sum_debits_equals_sum_credits` — total debits across the batch must equal total credits
-   - Scope `batch` means check per batch group; scope `entry` means check per journal entry
+Each entry format:
+```json
+{"lines": [
+  {"account_code": "6100", "direction": "debit",  "amount": 24500.00},
+  {"account_code": "2200", "direction": "credit", "amount": 24500.00}
+]}
+```
+
+Gate 2 checks: debits equal credits per entry, accounts are active.
 
 ### Step 7: Format and write output
 
-Structure the output according to `output_format.columns` (in position order). If `batch` is specified, group entries by the `grouping_column` and separate groups with `entry_separator`.
-
-Write the result as the specified `file_format` (e.g., CSV).
+Structure output according to `output_format.columns` (position order). Group by `batch.grouping_column` if specified.
 
 ---
 
-## 4. User Journey: Inspect a Recipe (Read-Only)
-
-When you just need to understand what a recipe does without processing data.
-
-### Quick inspection
+## 5. User Journey: Inspect a Recipe (Read-Only)
 
 ```
-1. load_recipe(recipe_id="<id>")       → see structure, schema, rules, output
-2. get_processing_instructions("<id>")  → see computed measures, resolved accounts, validation
+1. load_recipe(recipe_id="<id>")              → structure, schema, rules, output
+2. get_processing_instructions(recipe_id="<id>") → measures, resolved accounts, conditions
+3. ontology://merged                           → property schemas for any node type
 ```
-
-### Deep inspection
-
-After loading the recipe:
-- Read `ontology://merged` to understand the property schemas and allowed relationships for any node type you see in the recipe
-- Read `constraints://merged` to see which relationships are valid between which node types
-- For Cypher-level exploration, use Tier 3 tools (when available) or see `docs/outline_skill.md`
-
----
-
-## 5. User Journey: Build a New Recipe (Future — Phase 2)
-
-> This journey requires Tier 2 write tools that are not yet available.
-
-The intended workflow:
-
-1. **Describe source file** — provide column names, types, and row grain → `build_schema`
-2. **Describe accounting intent** — what accounts to debit/credit, how to compute amounts → `build_recipe` with mapping rules
-3. **Describe output requirements** — target system, file format, columns → `build_output`
-4. **Gate 1 validation** — `validate_pipeline` checks the template for structural correctness (all slots have accounts, all measures have columns, relationship constraints satisfied)
-5. **Fix errors** — iterate on any Gate 1 failures
-6. **Save** — `save_pipeline` persists to Neo4j
-
-This workflow is planned for Phase 2. Until then, recipes must be built via direct Neo4j operations (see `docs/outline_skill.md` for Cypher patterns).
 
 ---
 
@@ -188,62 +290,53 @@ This workflow is planned for Phase 2. Until then, recipes must be built via dire
 
 ### Double-entry invariant
 
-Every journal entry must balance: **total debits = total credits**. This is a hard block — never produce unbalanced entries.
+Every journal entry must balance: **total debits = total credits**. Hard block — never produce unbalanced entries.
 
 ### Account types and normal balances
 
 | Account Type | Normal Balance | Equation Side |
 |---|---|---|
 | asset | debit | Left (A = L + E) |
-| liability | credit | Right (A = L + E) |
-| equity | credit | Right (A = L + E) |
+| liability | credit | Right |
+| equity | credit | Right |
 | revenue | credit | Increases equity |
 | expense | debit | Decreases equity |
 | contra_revenue | debit | Offsets revenue |
 | contra_expense | credit | Offsets expense |
 
-A debit **increases** accounts with a debit normal balance and **decreases** accounts with a credit normal balance. Vice versa for credits.
-
-### Clearing accounts
-
-Accounts with `semantic_type: clearing` should net to zero over time. If a clearing account has a non-zero balance, it's a warning (not an error) — investigate the cause.
-
-### Reversals, not modifications
-
-Never modify posted transactions. To correct an error, create a reversal (equal and opposite entry) followed by the corrected entry. This preserves the audit trail.
-
 ### Gate 1 vs Gate 2
 
-- **Gate 1 (template validation):** Checks the recipe template itself — structural correctness, relationship constraints, all slots wired to accounts. Run before saving a recipe to Neo4j.
-- **Gate 2 (transaction validation):** Checks actual data being processed — debits equal credits, accounts are active, validation rules pass. Run before writing output.
-
-For full accounting semantics, see `docs/ontology.md`.
+- **Gate 1 (template validation):** Structural correctness of the recipe — slots wired to accounts, measures reference columns, WHEN edges point to existing conditions. Runs automatically inside `build_and_save_pipeline`.
+- **Gate 2 (transaction validation):** Actual data being processed — debits equal credits, accounts active. Use `validate_entries` before writing output.
 
 ### Naming conventions
 
-Node labels use **PascalCase** (`Account`, `TransactionLine`, `SourceSchema`) and relationship types use **UPPER_SNAKE_CASE** (`BELONGS_TO`, `HAS_RULE`, `MAPPED_TO`) — both per Neo4j recommendations. Property names use **snake_case** (`account_type`, `normal_balance`, `recipe_id`) — a deliberate divergence from Neo4j's `camelCase` recommendation, chosen for consistency with the Python codebase. This applies to all properties across core and recipe ontologies.
+Properties use **snake_case** (`account_type`, `normal_balance`, `recipe_id`). Node labels use **PascalCase** (`Account`, `MappingRule`). Relationship types use **UPPER_SNAKE_CASE** (`HAS_RULE`, `MAPPED_TO`, `WHEN`).
 
 ---
 
 ## 7. Anti-Patterns
 
+**Don't pass `debit`/`credit` as arrays.**
+Each rule takes a single `"debit": {...}` and `"credit": {...}` dict. Passing a list causes a build error. The builder will normalize `"debits": [{...}]` (single-item list) automatically, but passing multi-item lists is not supported.
+
+**Don't reuse `slot_id` across rules.**
+Every account slot must have a unique `slot_id` within the recipe. Reusing one causes the second rule's slot to overwrite the first in Neo4j.
+
+**Don't put conditions in the schema section.**
+`conditions[]` belong in the `recipe` section, not `schema`. The builder migrates `schema.conditions` silently for backward compatibility, but the canonical location is `recipe.conditions`.
+
 **Don't skip Gate 2 before writing output.**
-Always validate that debits equal credits and check the output format's validation rules before producing the final file. An unbalanced journal entry is an accounting error.
+Always validate that debits equal credits before producing the final file. An unbalanced journal entry is an accounting error.
 
 **Don't hardcode account codes.**
-Get account codes from the recipe's resolved mapping rules (via `get_processing_instructions`). The recipe graph already resolves `AccountSlot → MAPPED_TO → Account`. Hardcoding bypasses this and breaks when accounts change.
-
-**Don't dump raw graph data into context.**
-Use the summarized tool responses from `load_recipe` and `get_processing_instructions`. These are pre-summarized for efficient consumption. Loading the full `GraphPattern` with all nodes/relationships into the conversation wastes context window.
-
-**Don't use Tier 3 (raw Cypher) when a Tier 1 tool exists.**
-If `load_recipe` + `get_processing_instructions` covers your need, use them. They return structured, validated summaries. Drop to Tier 3 only for ad-hoc exploration or debugging that the higher tools don't cover.
+Get account codes from the recipe's resolved mapping rules via `get_processing_instructions`. The recipe graph resolves `AccountSlot → MAPPED_TO → Account`.
 
 **Don't skip `load_recipe` and jump to `get_processing_instructions`.**
 The server caches the graph on load. `get_processing_instructions` reads from the cache. Calling it without loading first returns an error.
 
 **Don't invent measures or accounts not in the recipe.**
-The recipe defines exactly which columns to aggregate, what operations to use, and which accounts to post to. Follow the instructions literally — don't add extra measures or remap accounts unless the user explicitly asks.
+Follow the processing instructions literally.
 
 ---
 
@@ -254,32 +347,35 @@ Start here
     │
     ▼
 ┌─────────────────────────────────────────────┐
-│ Can load_recipe + get_processing_instructions│
-│ answer the question?                         │
-│                                              │
-│ YES → Use Tier 1 (covers ~90% of tasks)     │
-│ NO  ↓                                        │
+│ Need to build or save a recipe?             │
+│                                             │
+│ YES → build_and_save_pipeline               │
+│ NO  ↓                                       │
 └─────────────────────────────────────────────┘
     │
     ▼
 ┌─────────────────────────────────────────────┐
-│ Do you need to build/modify a recipe         │
-│ step by step?                                │
-│                                              │
-│ YES → Use Tier 2 (when available)            │
-│ NO  ↓                                        │
+│ Need to process data through a recipe?      │
+│                                             │
+│ YES → load_recipe → get_processing_         │
+│       instructions → validate_entries       │
+│ NO  ↓                                       │
 └─────────────────────────────────────────────┘
     │
     ▼
 ┌─────────────────────────────────────────────┐
-│ Ad-hoc exploration or debugging?             │
-│                                              │
-│ YES → Use Tier 3: run_cypher                 │
-│       (see docs/outline_skill.md for         │
-│        Cypher query patterns)                │
-│ NO  → Check if the ontology or constraints   │
-│       resources answer your question         │
+│ Need to understand the ontology or schema?  │
+│                                             │
+│ YES → ontology://merged or                  │
+│       constraints://merged                  │
+│ NO  ↓                                       │
+└─────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────┐
+│ Ad-hoc exploration or debugging?            │
+│                                             │
+│ YES → Use Tier 3: run_cypher                │
+│       (see docs/outline_skill.md)           │
 └─────────────────────────────────────────────┘
 ```
-
-**Rule of thumb:** Start with Tier 1. Drop to a lower tier only when the higher tier doesn't have what you need. Each tier increases flexibility but also increases the risk of malformed queries and the amount of context consumed.

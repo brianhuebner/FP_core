@@ -26,10 +26,10 @@ def _generate_node_id(recipe_id: str, prefix: str, name: str) -> str:
 def _build_schema_nodes(
     schema_spec: Dict[str, Any],
     recipe_id: str,
-) -> Tuple[Node, List[Node], List[Node], List[Node], List[Relationship]]:
-    """Build SourceSchema + Column + Measure + Condition nodes and all rels.
+) -> Tuple[Node, List[Node], List[Node], List[Relationship]]:
+    """Build SourceSchema + Column + Measure nodes and all rels.
 
-    Returns: (schema_node, column_nodes, measure_nodes, condition_nodes, relationships)
+    Returns: (schema_node, column_nodes, measure_nodes, relationships)
     """
     schema_id = _generate_node_id(recipe_id, "schema", schema_spec["name"])
 
@@ -121,34 +121,18 @@ def _build_schema_nodes(
                 properties={},
             ))
 
-    # Conditions
-    condition_nodes: List[Node] = []
-    for cond_spec in schema_spec.get("conditions", []):
-        cond_id = _generate_node_id(recipe_id, "cond", cond_spec["condition_id"])
-        cond_props: Dict[str, Any] = {
-            "recipe_id": recipe_id,
-            "condition_id": cond_spec["condition_id"],
-            "column": cond_spec["column"],
-            "operator": cond_spec["operator"],
-        }
-        if cond_spec.get("value") is not None:
-            cond_props["value"] = cond_spec["value"]
-        condition_nodes.append(Node(
-            id=cond_id, labels={NodeLabel.CONDITION}, properties=cond_props,
-        ))
-
     all_rels = col_rels + msr_rels + agg_rels
-    return schema_node, column_nodes, measure_nodes, condition_nodes, all_rels
+    return schema_node, column_nodes, measure_nodes, all_rels
 
 
 def _build_recipe_nodes(
     recipe_spec: Dict[str, Any],
     schema_node_id: str,
     recipe_id: str,
-) -> Tuple[Node, List[Node], List[Node], List[Node], List[Node], List[Relationship]]:
-    """Build AccountingRecipe + MappingRule + AccountSlot + Account + Reference nodes and all rels.
+) -> Tuple[Node, List[Node], List[Node], List[Node], List[Node], List[Node], List[Relationship]]:
+    """Build AccountingRecipe + MappingRule + AccountSlot + Account + Reference + Condition nodes and all rels.
 
-    Returns: (recipe_node, rule_nodes, slot_nodes, account_nodes, reference_nodes, relationships)
+    Returns: (recipe_node, rule_nodes, slot_nodes, account_nodes, reference_nodes, condition_nodes, relationships)
     """
     recipe_node_id = _generate_node_id(recipe_id, "recipe", recipe_spec["name"].replace(" ", "_").lower())
 
@@ -183,7 +167,23 @@ def _build_recipe_nodes(
     slot_nodes: List[Node] = []
     account_nodes_map: Dict[str, Node] = {}  # account_code → Node (dedup)
     reference_nodes_map: Dict[str, Node] = {}  # ref id → Node
+    condition_nodes: List[Node] = []
+    condition_id_map: Dict[str, str] = {}  # condition_id → node ID
     relationships: List[Relationship] = [transforms_rel]
+
+    # Build condition nodes so rules can reference them via WHEN
+    for cond_spec in recipe_spec.get("conditions", []):
+        cond_id = _generate_node_id(recipe_id, "cond", cond_spec["condition_id"])
+        cond_props: Dict[str, Any] = {
+            "recipe_id": recipe_id,
+            "condition_id": cond_spec["condition_id"],
+            "column": cond_spec["column"],
+            "operator": cond_spec["operator"],
+        }
+        if cond_spec.get("value") is not None:
+            cond_props["value"] = cond_spec["value"]
+        condition_nodes.append(Node(id=cond_id, labels={NodeLabel.CONDITION}, properties=cond_props))
+        condition_id_map[cond_spec["condition_id"]] = cond_id
 
     # Build reference nodes first so rules can link to them
     for ref_spec in recipe_spec.get("references", []):
@@ -197,6 +197,16 @@ def _build_recipe_nodes(
         )
 
     for rule_spec in recipe_spec.get("rules", []):
+        # BUG-001: normalize plural/singular key variants and unwrap single-item lists
+        rule_spec = dict(rule_spec)
+        for singular, plural in [("debit", "debits"), ("credit", "credits")]:
+            if plural in rule_spec and singular not in rule_spec:
+                val = rule_spec.pop(plural)
+                rule_spec[singular] = val[0] if isinstance(val, list) and len(val) == 1 else val
+            elif singular in rule_spec and isinstance(rule_spec[singular], list):
+                lst = rule_spec[singular]
+                rule_spec[singular] = lst[0] if len(lst) == 1 else lst
+
         rule_id = _generate_node_id(recipe_id, "rule", rule_spec["rule_name"])
         rule_props: Dict[str, Any] = {
             "recipe_id": recipe_id,
@@ -219,6 +229,17 @@ def _build_recipe_nodes(
             end_node_id=rule_id,
             properties={},
         ))
+
+        # WHEN: rule → condition (optional)
+        when_cond_id = rule_spec.get("when")
+        if when_cond_id and when_cond_id in condition_id_map:
+            relationships.append(Relationship(
+                id=_generate_node_id(recipe_id, "rel_when", rule_spec["rule_name"]),
+                type=RelationshipType.WHEN,
+                start_node_id=rule_id,
+                end_node_id=condition_id_map[when_cond_id],
+                properties={},
+            ))
 
         # Process debit and credit sides
         for side_key, rel_type in [("debit", RelationshipType.DEBITS), ("credit", RelationshipType.CREDITS)]:
@@ -286,7 +307,7 @@ def _build_recipe_nodes(
 
     account_nodes = list(account_nodes_map.values())
     reference_nodes = list(reference_nodes_map.values())
-    return recipe_node, rule_nodes, slot_nodes, account_nodes, reference_nodes, relationships
+    return recipe_node, rule_nodes, slot_nodes, account_nodes, reference_nodes, condition_nodes, relationships
 
 
 def _build_output_nodes(
@@ -426,7 +447,7 @@ def build_pipeline_from_spec(spec: Dict[str, Any]) -> GraphPattern:
 
     # 1. Build schema subgraph
     schema_spec = spec["schema"]
-    schema_node, col_nodes, msr_nodes, cond_nodes, schema_rels = _build_schema_nodes(
+    schema_node, col_nodes, msr_nodes, schema_rels = _build_schema_nodes(
         schema_spec, recipe_id,
     )
 
@@ -439,7 +460,6 @@ def build_pipeline_from_spec(spec: Dict[str, Any]) -> GraphPattern:
         schema_node=schema_node,
         column_nodes=col_nodes,
         measure_nodes=msr_nodes,
-        condition_nodes=cond_nodes,
         column_rels=col_rels,
         measure_rels=msr_rels,
         aggregates_rels=agg_rels if agg_rels else None,
@@ -450,8 +470,11 @@ def build_pipeline_from_spec(spec: Dict[str, Any]) -> GraphPattern:
     # Default source_schema to schema name if not provided
     if "source_schema" not in recipe_spec:
         recipe_spec = dict(recipe_spec, source_schema=schema_spec["name"])
+    # Backward compat: conditions in schema_spec migrate silently to recipe_spec
+    if "conditions" in schema_spec and "conditions" not in recipe_spec:
+        recipe_spec = dict(recipe_spec, conditions=schema_spec["conditions"])
 
-    recipe_node, rule_nodes, slot_nodes, account_nodes, ref_nodes, recipe_rels = _build_recipe_nodes(
+    recipe_node, rule_nodes, slot_nodes, account_nodes, ref_nodes, cond_nodes, recipe_rels = _build_recipe_nodes(
         recipe_spec, schema_node.id, recipe_id,
     )
 
@@ -461,9 +484,11 @@ def build_pipeline_from_spec(spec: Dict[str, Any]) -> GraphPattern:
         RelationshipType.HAS_RULE, RelationshipType.DEBITS, RelationshipType.CREDITS,
     )]
     slot_rels = [r for r in recipe_rels if r.type == RelationshipType.MAPPED_TO]
-    additional_rels = [r for r in recipe_rels if r.type == RelationshipType.USES_REFERENCE]
+    additional_rels = [r for r in recipe_rels if r.type in (
+        RelationshipType.USES_REFERENCE, RelationshipType.WHEN,
+    )]
 
-    additional_nodes: List[Node] = account_nodes + ref_nodes
+    additional_nodes: List[Node] = account_nodes + ref_nodes + cond_nodes
 
     recipe_pattern = build_recipe_pattern(
         recipe_node=recipe_node,
