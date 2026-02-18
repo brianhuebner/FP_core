@@ -12,9 +12,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from domain import NodeLabel, RelationshipType
-from domain.logic import validate_recipe, validate_pipeline_connectivity, validate_output_format
+from domain.logic import validate_recipe, validate_pipeline_connectivity, validate_output_format, extract_conditions_for_rule
 from domain.ontology import ValidationResult, validate_node_properties
 from domain.ontology_recipe import merged_ontology
+from mcp_server.summarizers import summarize_processing_instructions
 from persistence import Neo4jConnection, load_pattern_by_recipe
 
 
@@ -135,6 +136,49 @@ def validate(recipe_id: str, results_dir: str) -> dict:
 
     report["checks"]["relationship_structure"] = rel_checks
 
+    # --- Check: Conditional rule (WHEN wiring) ---
+    condition_nodes = [n for n in pattern.nodes if NodeLabel.CONDITION in n.labels]
+    when_rels = [r for r in pattern.relationships if r.type == RelationshipType.WHEN]
+
+    condition_props_ok = any(
+        n.properties.get("column") == "department"
+        and n.properties.get("operator") == "equals"
+        and n.properties.get("value") == "Engineering"
+        for n in condition_nodes
+    )
+
+    conditional_rule_exists = any(
+        r.type == RelationshipType.WHEN and r.start_node_id in {n.id for n in rule_nodes}
+        for r in pattern.relationships
+    )
+
+    roundtrip_ok = False
+    try:
+        pi = summarize_processing_instructions(pattern, recipe_id)
+        rules_out = pi.get("rules", [])
+        roundtrip_ok = any("conditions" in rule for rule in rules_out)
+    except Exception:
+        pass
+
+    cond_all_pass = (
+        len(condition_nodes) >= 1
+        and len(when_rels) >= 1
+        and condition_props_ok
+        and conditional_rule_exists
+        and roundtrip_ok
+    )
+
+    report["checks"]["conditional_rule"] = {
+        "pass": cond_all_pass,
+        "details": {
+            "condition_node_count": len(condition_nodes),
+            "when_rel_count": len(when_rels),
+            "condition_props_ok": condition_props_ok,
+            "conditional_rule_exists": conditional_rule_exists,
+            "roundtrip_ok": roundtrip_ok,
+        },
+    }
+
     # --- Check: Account codes match chart_of_accounts ---
     account_nodes = [n for n in pattern.nodes if NodeLabel.ACCOUNT in n.labels]
     matched = 0
@@ -177,14 +221,14 @@ def validate(recipe_id: str, results_dir: str) -> dict:
     has_output_format = any(NodeLabel.OUTPUT_FORMAT in n.labels for n in pattern.nodes)
     has_output_columns = any(NodeLabel.OUTPUT_COLUMN in n.labels for n in pattern.nodes)
     has_validation_rule = any(NodeLabel.VALIDATION_RULE in n.labels for n in pattern.nodes)
-    has_batch = any(NodeLabel.BATCH_FORMAT in n.labels for n in pattern.nodes)
+    has_entry_structure = any(NodeLabel.ENTRY_STRUCTURE in n.labels for n in pattern.nodes)
 
     report["checks"]["output_completeness"] = {
         "pass": has_output_format and has_output_columns,
         "output_format": has_output_format,
         "output_columns": has_output_columns,
         "validation_rules": has_validation_rule,
-        "batch_format": has_batch,
+        "entry_structure": has_entry_structure,
     }
 
     # --- Check: First-attempt success (from agent output) ---
@@ -221,20 +265,23 @@ def validate(recipe_id: str, results_dir: str) -> dict:
     report["checks"]["ontology_consulted"] = {"pass": ontology_consulted}
 
     # --- Scoring ---
-    # Recipe saved successfully: 40%
+    # Recipe saved successfully: 35%
     recipe_saved_score = 1.0 if report["checks"]["recipe_loads"]["pass"] else 0.0
-    report["scores"]["recipe_saved"] = recipe_saved_score * 0.4
+    report["scores"]["recipe_saved"] = recipe_saved_score * 0.35
 
-    # First-attempt success: 20%
-    report["scores"]["first_attempt"] = (1.0 if first_attempt else 0.0) * 0.2
+    # First-attempt success: 15%
+    report["scores"]["first_attempt"] = (1.0 if first_attempt else 0.0) * 0.15
 
-    # All 3 mapping rules correct: 20%
+    # All mapping rules correct: 15%
     rules_correct = (
         report["checks"]["relationship_structure"]["pass"]
         and len(rule_nodes) >= 3
         and report["checks"]["account_codes"]["pass"]
     )
-    report["scores"]["mapping_rules"] = (1.0 if rules_correct else 0.0) * 0.2
+    report["scores"]["mapping_rules"] = (1.0 if rules_correct else 0.0) * 0.15
+
+    # Conditional rule (WHEN wiring): 15%
+    report["scores"]["conditional_rule"] = (1.0 if cond_all_pass else 0.0) * 0.15
 
     # Output format present: 10%
     report["scores"]["output_format"] = (1.0 if has_output_format and has_output_columns else 0.0) * 0.1
