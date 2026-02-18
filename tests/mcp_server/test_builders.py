@@ -17,6 +17,7 @@ from mcp_server.builders import (
     _build_recipe_nodes,
     _build_schema_nodes,
     _generate_node_id,
+    build_format_from_spec,
     build_pipeline_from_spec,
 )
 
@@ -104,7 +105,7 @@ def output_spec():
         "validation_rules": [
             {"name": "balanced_entry", "expression": "SUM(debit_amount) == SUM(credit_amount)", "scope": "batch"},
         ],
-        "batch": {
+        "entry_structure": {
             "grouping_column": "journal_number",
             "entry_separator": "blank_row",
             "date_column": "journal_date",
@@ -201,6 +202,62 @@ class TestBuildSchemaNodes:
     def test_empty_conditions(self, schema_spec):
         _, _, _, conditions, _ = _build_schema_nodes(schema_spec, RECIPE_ID)
         assert len(conditions) == 0
+
+    def test_measure_group_by_single_column(self):
+        spec = {
+            "name": "test", "source_system": "csv_import", "columns": [],
+            "measures": [{"name": "total", "operation": "sum", "group_by": ["pay_date"]}],
+        }
+        _, _, measures, _, _ = _build_schema_nodes(spec, "test_id")
+        assert measures[0].properties["group_by"] == "pay_date"
+
+    def test_measure_group_by_multiple_columns(self):
+        spec = {
+            "name": "test", "source_system": "csv_import", "columns": [],
+            "measures": [{"name": "total", "operation": "sum", "group_by": ["pay_date", "location"]}],
+        }
+        _, _, measures, _, _ = _build_schema_nodes(spec, "test_id")
+        assert measures[0].properties["group_by"] == "pay_date,location"
+
+    def test_measure_group_by_empty_array(self):
+        spec = {
+            "name": "test", "source_system": "csv_import", "columns": [],
+            "measures": [{"name": "total", "operation": "sum", "group_by": []}],
+        }
+        _, _, measures, _, _ = _build_schema_nodes(spec, "test_id")
+        assert "group_by" not in measures[0].properties
+
+    def test_measure_split_by(self):
+        spec = {
+            "name": "test", "source_system": "csv_import", "columns": [],
+            "measures": [{"name": "total", "operation": "sum", "split_by": "department"}],
+        }
+        _, _, measures, _, _ = _build_schema_nodes(spec, "test_id")
+        assert measures[0].properties["split_by"] == "department"
+
+    def test_measure_split_column(self):
+        spec = {
+            "name": "test", "source_system": "csv_import", "columns": [],
+            "measures": [{"name": "total", "operation": "sum", "split_column": "department"}],
+        }
+        _, _, measures, _, _ = _build_schema_nodes(spec, "test_id")
+        assert measures[0].properties["split_column"] == "department"
+
+    def test_measure_all_aggregation_fields(self):
+        spec = {
+            "name": "test", "source_system": "csv_import", "columns": [],
+            "measures": [{
+                "name": "total", "operation": "sum",
+                "group_by": ["pay_date", "location"],
+                "split_by": "department",
+                "split_column": "dept_code",
+            }],
+        }
+        _, _, measures, _, _ = _build_schema_nodes(spec, "test_id")
+        m = measures[0]
+        assert m.properties["group_by"] == "pay_date,location"
+        assert m.properties["split_by"] == "department"
+        assert m.properties["split_column"] == "dept_code"
 
 
 # ============================================================================
@@ -313,11 +370,11 @@ class TestBuildOutputNodes:
         assert len(val_nodes) == 1
         assert val_nodes[0].properties["name"] == "balanced_entry"
 
-    def test_returns_batch_format(self, output_spec):
-        _, _, _, batch_node, _ = _build_output_nodes(output_spec, RECIPE_ID)
-        assert batch_node is not None
-        assert NodeLabel.BATCH_FORMAT in batch_node.labels
-        assert batch_node.properties["grouping_column"] == "journal_number"
+    def test_returns_entry_structure(self, output_spec):
+        _, _, _, entry_node, _ = _build_output_nodes(output_spec, RECIPE_ID)
+        assert entry_node is not None
+        assert NodeLabel.ENTRY_STRUCTURE in entry_node.labels
+        assert entry_node.properties["grouping_column"] == "journal_number"
 
     def test_has_column_relationships(self, output_spec):
         _, _, _, _, rels = _build_output_nodes(output_spec, RECIPE_ID)
@@ -329,12 +386,12 @@ class TestBuildOutputNodes:
         val_rels = [r for r in rels if r.type == RelationshipType.HAS_VALIDATION]
         assert len(val_rels) == 1
 
-    def test_has_batch_format_relationship(self, output_spec):
+    def test_has_entry_structure_relationship(self, output_spec):
         _, _, _, _, rels = _build_output_nodes(output_spec, RECIPE_ID)
-        batch_rels = [r for r in rels if r.type == RelationshipType.HAS_BATCH_FORMAT]
-        assert len(batch_rels) == 1
+        entry_rels = [r for r in rels if r.type == RelationshipType.HAS_ENTRY_STRUCTURE]
+        assert len(entry_rels) == 1
 
-    def test_no_batch_when_absent(self):
+    def test_no_entry_structure_when_absent(self):
         spec = {
             "name": "simple_output",
             "target_system": "test",
@@ -344,10 +401,10 @@ class TestBuildOutputNodes:
             ],
             "validation_rules": [],
         }
-        _, _, _, batch_node, rels = _build_output_nodes(spec, "test")
-        assert batch_node is None
-        batch_rels = [r for r in rels if r.type == RelationshipType.HAS_BATCH_FORMAT]
-        assert len(batch_rels) == 0
+        _, _, _, entry_node, rels = _build_output_nodes(spec, "test")
+        assert entry_node is None
+        entry_rels = [r for r in rels if r.type == RelationshipType.HAS_ENTRY_STRUCTURE]
+        assert len(entry_rels) == 0
 
 
 # ============================================================================
@@ -378,7 +435,7 @@ class TestBuildPipelineFromSpec:
             NodeLabel.SOURCE_SCHEMA, NodeLabel.COLUMN, NodeLabel.MEASURE,
             NodeLabel.ACCOUNTING_RECIPE, NodeLabel.MAPPING_RULE, NodeLabel.ACCOUNT_SLOT,
             NodeLabel.ACCOUNT, NodeLabel.OUTPUT_FORMAT, NodeLabel.OUTPUT_COLUMN,
-            NodeLabel.VALIDATION_RULE, NodeLabel.BATCH_FORMAT,
+            NodeLabel.VALIDATION_RULE, NodeLabel.ENTRY_STRUCTURE,
         }
         assert expected.issubset(labels_present)
 
@@ -531,3 +588,61 @@ class TestBuildPipelineEdgeCases:
 
         uses_ref_rels = [r for r in pattern.relationships if r.type == RelationshipType.USES_REFERENCE]
         assert len(uses_ref_rels) == 1
+
+
+# ============================================================================
+# TestBuildFormatFromSpec
+# ============================================================================
+
+class TestBuildFormatFromSpec:
+    def test_returns_graph_pattern(self, output_spec):
+        spec = dict(output_spec, format_id="test_format")
+        pattern = build_format_from_spec(spec)
+        assert isinstance(pattern, GraphPattern)
+
+    def test_has_output_format_node(self, output_spec):
+        spec = dict(output_spec, format_id="test_format")
+        pattern = build_format_from_spec(spec)
+        fmt_nodes = [n for n in pattern.nodes if NodeLabel.OUTPUT_FORMAT in n.labels]
+        assert len(fmt_nodes) == 1
+        assert fmt_nodes[0].properties["format_id"] == "test_format"
+
+    def test_has_output_columns(self, output_spec):
+        spec = dict(output_spec, format_id="test_format")
+        pattern = build_format_from_spec(spec)
+        col_nodes = [n for n in pattern.nodes if NodeLabel.OUTPUT_COLUMN in n.labels]
+        assert len(col_nodes) == 6
+
+    def test_has_validation_rule(self, output_spec):
+        spec = dict(output_spec, format_id="test_format")
+        pattern = build_format_from_spec(spec)
+        val_nodes = [n for n in pattern.nodes if NodeLabel.VALIDATION_RULE in n.labels]
+        assert len(val_nodes) == 1
+
+    def test_has_entry_structure(self, output_spec):
+        spec = dict(output_spec, format_id="test_format")
+        pattern = build_format_from_spec(spec)
+        entry_nodes = [n for n in pattern.nodes if NodeLabel.ENTRY_STRUCTURE in n.labels]
+        assert len(entry_nodes) == 1
+        assert entry_nodes[0].properties["format_id"] == "test_format"
+
+    def test_format_id_on_all_nodes(self, output_spec):
+        spec = dict(output_spec, format_id="my_format")
+        pattern = build_format_from_spec(spec)
+        for node in pattern.nodes:
+            assert node.properties.get("format_id") == "my_format"
+
+    def test_minimal_format_without_entry_structure(self):
+        spec = {
+            "format_id": "minimal_fmt",
+            "name": "Minimal",
+            "target_system": "csv",
+            "file_format": "csv",
+            "columns": [
+                {"name": "col1", "position": 1, "data_type": "string", "required": True},
+            ],
+            "validation_rules": [],
+        }
+        pattern = build_format_from_spec(spec)
+        entry_nodes = [n for n in pattern.nodes if NodeLabel.ENTRY_STRUCTURE in n.labels]
+        assert len(entry_nodes) == 0

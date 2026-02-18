@@ -94,10 +94,11 @@ mcp_server/
   __main__.py          # Entry point: python -m mcp_server
   builders.py          # Layer 5: pure functions — JSON pipeline spec → domain objects
   summarizers.py       # Layer 5: pure functions — GraphPattern → JSON-serializable dicts
-  tools.py             # Layer 5: Tier 1 tool handlers (4 tools: load, instructions, build+save, validate)
+  tools.py             # Layer 5: Tier 1 tool handlers (6 tools: load_recipe, load_format, get_processing_instructions, build_and_save_pipeline, build_output, validate_entries)
   prompts.py           # Layer 5: MCP prompt workflow templates (build-pipeline, process-data, gate2-checklist)
   resources.py         # Layer 5: resource handlers (ontology://merged, constraints://merged)
 docs/
+  vision_and_roadmap.md  # Project vision, feature list, Lean Six Sigma alignment, eval targets
   fp_core_skill.md     # MCP-driven skill: guided workflows for AI agents using MCP tools
   mcp_architecture.md  # MCP server architecture and design decisions
   user_flow.md         # End-to-end user flow documentation
@@ -132,38 +133,12 @@ These are test-asserted — do not change without updating both code and tests:
 | `merged_relationship_constraints()` | 25 | All constraints combined |
 | `ACCOUNT_TYPE_BALANCE_MAP` | 7 | Account type → normal balance direction |
 | `MERGE_KEYS`                       | 19  | One per NodeLabel                              |
-| Total tests                        | 347 | Across 5 domain + 2 MCP + persistence test files |
+| MCP Tools                          | 6   | load_recipe, load_format, get_processing_instructions, build_and_save_pipeline, build_output, validate_entries |
+| Total tests                        | 372 | Across 5 domain + 2 MCP + persistence test files |
 
 ## Known Constraints
 
-### Measure Aggregation Properties Not Wired Through Builder
-
-**Status:** Open — domain types and ontology support these fields, but the MCP builder silently drops them.
-
-**Affected fields on `Measure`** (`domain/types_recipe.py`):
-
-| Field | Domain Type | Ontology Type | Builder Status |
-|-------|------------|---------------|----------------|
-| `group_by` | `Tuple[str, ...]` | `str` (optional) | Not read from spec |
-| `split_by` | `Optional[str]` | `str` (optional) | Not read from spec |
-| `split_column` | `Optional[str]` | `str` (optional) | Not read from spec |
-
-**What this means:**
-
-- A user *can* include `group_by`, `split_by`, or `split_column` in their JSON measure spec, but `mcp_server/builders.py:85-101` only extracts `name`, `operation`, `source_column`, and `description`. The rest is silently ignored.
-- The domain type defines `group_by` as `Tuple[str, ...]` (multiple column names), but the ontology schema declares it as `str`. A serialization convention (e.g. comma-separated) is needed to bridge the two.
-- Per-measure grouping is the intended design — `Measure("total_net")` should be able to group by `created_date` independently from `Measure("total_gross")` grouping by `deposit_date`. The graph structure supports this (each Measure is its own node with its own properties), but the pipeline spec ingestion path doesn't carry it through.
-
-**Where the gap lives:**
-
-| Layer | File | What exists | What's missing |
-|-------|------|-------------|----------------|
-| L1 Types | `domain/types_recipe.py:78-86` | `group_by: Tuple[str, ...]` on Measure dataclass | Nothing — type is correct |
-| L2 Ontology | `domain/ontology_recipe.py:109-121` | `group_by` in `_MEASURE_PROPS.optional`, typed as `str` | Tuple-to-string serialization convention |
-| L5 Builder | `mcp_server/builders.py:85-101` | Reads `name`, `operation`, `source_column`, `description` | Does not read `group_by`, `split_by`, `split_column` |
-| L5 Summarizer | `mcp_server/summarizers.py:148-171` | Resolves AGGREGATES column name | Does not emit `group_by` in processing instructions |
-
-**To resolve:** Update the builder to read these fields from the measure spec, define a serialization convention for `Tuple[str, ...] → str`, and update the summarizer to include grouping semantics in processing instructions.
+None currently open.
 
 ## Import Patterns
 
