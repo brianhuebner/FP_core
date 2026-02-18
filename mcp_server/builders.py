@@ -92,6 +92,15 @@ def _build_schema_nodes(
         if msr_spec.get("description"):
             msr_props["description"] = msr_spec["description"]
 
+        # Aggregation properties: group_by (array → comma-separated), split_by, split_column
+        group_by = msr_spec.get("group_by")
+        if group_by:
+            msr_props["group_by"] = ",".join(group_by)
+        if msr_spec.get("split_by"):
+            msr_props["split_by"] = msr_spec["split_by"]
+        if msr_spec.get("split_column"):
+            msr_props["split_column"] = msr_spec["split_column"]
+
         measure_nodes.append(Node(id=msr_id, labels={NodeLabel.MEASURE}, properties=msr_props))
         msr_rels.append(Relationship(
             id=_generate_node_id(recipe_id, "rel_has_msr", msr_spec["name"]),
@@ -282,16 +291,16 @@ def _build_recipe_nodes(
 
 def _build_output_nodes(
     output_spec: Dict[str, Any],
-    recipe_id: str,
+    format_id: str,
 ) -> Tuple[Node, List[Node], List[Node], Optional[Node], List[Relationship]]:
-    """Build OutputFormat + OutputColumn + ValidationRule + BatchFormat nodes and all rels.
+    """Build OutputFormat + OutputColumn + ValidationRule + EntryStructure nodes and all rels.
 
-    Returns: (format_node, column_nodes, validation_nodes, batch_node, relationships)
+    Returns: (format_node, column_nodes, validation_nodes, entry_structure_node, relationships)
     """
-    fmt_id = _generate_node_id(recipe_id, "fmt", output_spec["name"])
+    fmt_id = _generate_node_id(format_id, "fmt", output_spec["name"])
 
     fmt_props: Dict[str, Any] = {
-        "recipe_id": recipe_id,
+        "format_id": format_id,
         "name": output_spec["name"],
         "target_system": output_spec["target_system"],
         "file_format": output_spec["file_format"],
@@ -305,9 +314,9 @@ def _build_output_nodes(
     column_nodes: List[Node] = []
     col_rels: List[Relationship] = []
     for col_spec in output_spec.get("columns", []):
-        ocol_id = _generate_node_id(recipe_id, "ocol", col_spec["name"])
+        ocol_id = _generate_node_id(format_id, "ocol", col_spec["name"])
         ocol_props: Dict[str, Any] = {
-            "format_id": recipe_id,
+            "format_id": format_id,
             "name": col_spec["name"],
             "position": col_spec["position"],
             "data_type": col_spec["data_type"],
@@ -319,7 +328,7 @@ def _build_output_nodes(
 
         column_nodes.append(Node(id=ocol_id, labels={NodeLabel.OUTPUT_COLUMN}, properties=ocol_props))
         col_rels.append(Relationship(
-            id=_generate_node_id(recipe_id, "rel_fmt_col", col_spec["name"]),
+            id=_generate_node_id(format_id, "rel_fmt_col", col_spec["name"]),
             type=RelationshipType.HAS_COLUMN,
             start_node_id=fmt_id,
             end_node_id=ocol_id,
@@ -330,9 +339,9 @@ def _build_output_nodes(
     validation_nodes: List[Node] = []
     val_rels: List[Relationship] = []
     for val_spec in output_spec.get("validation_rules", []):
-        val_id = _generate_node_id(recipe_id, "val", val_spec["name"])
+        val_id = _generate_node_id(format_id, "val", val_spec["name"])
         val_props: Dict[str, Any] = {
-            "format_id": recipe_id,
+            "format_id": format_id,
             "name": val_spec["name"],
             "expression": val_spec["expression"],
             "scope": val_spec["scope"],
@@ -342,43 +351,77 @@ def _build_output_nodes(
 
         validation_nodes.append(Node(id=val_id, labels={NodeLabel.VALIDATION_RULE}, properties=val_props))
         val_rels.append(Relationship(
-            id=_generate_node_id(recipe_id, "rel_has_val", val_spec["name"]),
+            id=_generate_node_id(format_id, "rel_has_val", val_spec["name"]),
             type=RelationshipType.HAS_VALIDATION,
             start_node_id=fmt_id,
             end_node_id=val_id,
             properties={},
         ))
 
-    # Batch format
-    batch_node: Optional[Node] = None
-    batch_rel: Optional[Relationship] = None
-    batch_spec = output_spec.get("batch")
-    if batch_spec:
-        batch_id = _generate_node_id(recipe_id, "batch", output_spec["name"])
-        batch_props: Dict[str, Any] = {
-            "recipe_id": recipe_id,
-            "grouping_column": batch_spec["grouping_column"],
-            "entry_separator": batch_spec["entry_separator"],
-            "date_column": batch_spec["date_column"],
+    # Entry structure
+    entry_node: Optional[Node] = None
+    entry_rel: Optional[Relationship] = None
+    entry_spec = output_spec.get("entry_structure")
+    if entry_spec:
+        entry_id = _generate_node_id(format_id, "entry", output_spec["name"])
+        entry_props: Dict[str, Any] = {
+            "format_id": format_id,
+            "grouping_column": entry_spec["grouping_column"],
+            "entry_separator": entry_spec["entry_separator"],
+            "date_column": entry_spec["date_column"],
         }
-        batch_node = Node(id=batch_id, labels={NodeLabel.BATCH_FORMAT}, properties=batch_props)
-        batch_rel = Relationship(
-            id=_generate_node_id(recipe_id, "rel_has_batch", output_spec["name"]),
-            type=RelationshipType.HAS_BATCH_FORMAT,
+        entry_node = Node(id=entry_id, labels={NodeLabel.ENTRY_STRUCTURE}, properties=entry_props)
+        entry_rel = Relationship(
+            id=_generate_node_id(format_id, "rel_has_entry", output_spec["name"]),
+            type=RelationshipType.HAS_ENTRY_STRUCTURE,
             start_node_id=fmt_id,
-            end_node_id=batch_id,
+            end_node_id=entry_id,
             properties={},
         )
 
     relationships = col_rels + val_rels
-    if batch_rel:
-        relationships.append(batch_rel)
+    if entry_rel:
+        relationships.append(entry_rel)
 
-    return format_node, column_nodes, validation_nodes, batch_node, relationships
+    return format_node, column_nodes, validation_nodes, entry_node, relationships
+
+
+def build_format_from_spec(spec: Dict[str, Any]) -> GraphPattern:
+    """Top-level: convert an output format spec → standalone GraphPattern.
+
+    The spec must include format_id at the top level.
+    """
+    format_id = spec["format_id"]
+
+    fmt_node, col_nodes, val_nodes, entry_node, output_rels = _build_output_nodes(
+        spec, format_id,
+    )
+
+    col_rels = [r for r in output_rels if r.type == RelationshipType.HAS_COLUMN]
+    val_rels = [r for r in output_rels if r.type == RelationshipType.HAS_VALIDATION]
+    entry_rel = next(
+        (r for r in output_rels if r.type == RelationshipType.HAS_ENTRY_STRUCTURE),
+        None,
+    )
+
+    return build_output_format_pattern(
+        format_node=fmt_node,
+        column_nodes=col_nodes,
+        column_rels=col_rels,
+        validation_nodes=val_nodes if val_nodes else None,
+        validation_rels=val_rels if val_rels else None,
+        entry_structure_node=entry_node,
+        entry_structure_rel=entry_rel,
+    )
 
 
 def build_pipeline_from_spec(spec: Dict[str, Any]) -> GraphPattern:
-    """Top-level: convert full pipeline spec → composed GraphPattern."""
+    """Top-level: convert full pipeline spec → composed GraphPattern.
+
+    Output format handling: if an 'output' key is present, it is built as a
+    separate format pattern (using format_id derived from the output name)
+    and composed into the pipeline for validation purposes.
+    """
     recipe_id = spec["recipe_id"]
 
     # 1. Build schema subgraph
@@ -434,29 +477,15 @@ def build_pipeline_from_spec(spec: Dict[str, Any]) -> GraphPattern:
         additional_rels=additional_rels if additional_rels else None,
     )
 
-    # 3. Build output subgraph (optional)
+    # 3. Build output subgraph (backward compat — if 'output' key present,
+    #    build as independent format and compose for validation)
     output_pattern = None
     if "output" in spec:
-        fmt_node, out_col_nodes, val_nodes, batch_node, output_rels = _build_output_nodes(
-            spec["output"], recipe_id,
-        )
-
-        col_rels_out = [r for r in output_rels if r.type == RelationshipType.HAS_COLUMN]
-        val_rels_out = [r for r in output_rels if r.type == RelationshipType.HAS_VALIDATION]
-        batch_rel_out = next(
-            (r for r in output_rels if r.type == RelationshipType.HAS_BATCH_FORMAT),
-            None,
-        )
-
-        output_pattern = build_output_format_pattern(
-            format_node=fmt_node,
-            column_nodes=out_col_nodes,
-            column_rels=col_rels_out,
-            validation_nodes=val_nodes if val_nodes else None,
-            validation_rels=val_rels_out if val_rels_out else None,
-            batch_node=batch_node,
-            batch_rel=batch_rel_out,
-        )
+        output_spec = dict(spec["output"])
+        # Derive format_id for backward compat
+        if "format_id" not in output_spec:
+            output_spec["format_id"] = output_spec.get("name", recipe_id)
+        output_pattern = build_format_from_spec(output_spec)
 
     # 4. Compose full pipeline
     return compose_pipeline_pattern(schema_pattern, recipe_pattern, output_pattern)

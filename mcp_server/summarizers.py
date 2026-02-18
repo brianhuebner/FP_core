@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from domain.types import GraphPattern, Node, NodeLabel, RelationshipType
 from domain.ontology import ValidationResult
 from domain.logic import (
-    extract_batch_format,
+    extract_entry_structure,
     extract_debit_credit_slots,
     extract_measures_for_schema,
     extract_output_columns,
@@ -121,28 +121,19 @@ def summarize_recipe_load(pattern: GraphPattern, recipe_id: str) -> Dict[str, An
             ],
         }
 
-    # Output section
-    fmt_node = _find_single_node_by_label(pattern, NodeLabel.OUTPUT_FORMAT)
-    if fmt_node:
-        out_cols = extract_output_columns(pattern, fmt_node.id)
-        out_cols_sorted = sorted(out_cols, key=lambda n: _prop(n, "position", 0))
-        result["output"] = {
-            "name": _prop(fmt_node, "name"),
-            "target_system": _prop(fmt_node, "target_system"),
-            "file_format": _prop(fmt_node, "file_format"),
-            "columns": [
-                {"name": _prop(c, "name"), "position": _prop(c, "position")}
-                for c in out_cols_sorted
-            ],
-        }
-
     return result
 
 
 def summarize_processing_instructions(
-    pattern: GraphPattern, recipe_id: str,
+    pattern: GraphPattern,
+    recipe_id: str,
+    format_pattern: Optional[GraphPattern] = None,
 ) -> Dict[str, Any]:
-    """Summarize processing instructions for the get_processing_instructions tool."""
+    """Summarize processing instructions for the get_processing_instructions tool.
+
+    If format_pattern is provided, includes output format columns, validation
+    rules, and entry structure in the response.
+    """
     result: Dict[str, Any] = {"recipe_id": recipe_id}
 
     # Measures — with resolved column names via AGGREGATES
@@ -163,11 +154,21 @@ def summarize_processing_instructions(
                     if col_node:
                         col_name = _prop(col_node, "name")
                     break
-            measures_list.append({
+            measure_entry: Dict[str, Any] = {
                 "name": _prop(m, "name"),
                 "operation": _prop(m, "operation"),
                 "column": col_name,
-            })
+            }
+            group_by_str = _prop(m, "group_by")
+            if group_by_str:
+                measure_entry["group_by"] = group_by_str.split(",")
+            split_by = _prop(m, "split_by")
+            if split_by:
+                measure_entry["split_by"] = split_by
+            split_column = _prop(m, "split_column")
+            if split_column:
+                measure_entry["split_column"] = split_column
+            measures_list.append(measure_entry)
         result["measures"] = measures_list
 
     # Rules — with resolved accounts via debit/credit slots → MAPPED_TO
@@ -203,34 +204,80 @@ def summarize_processing_instructions(
             })
         result["rules"] = rules_list
 
-    # Output format — columns, validation, batch
+    # Output format — from separately loaded format pattern
+    fmt_pattern = format_pattern
+    if fmt_pattern is not None:
+        fmt_node = _find_single_node_by_label(fmt_pattern, NodeLabel.OUTPUT_FORMAT)
+        if fmt_node:
+            out_cols = extract_output_columns(fmt_pattern, fmt_node.id)
+            out_cols_sorted = sorted(out_cols, key=lambda n: _prop(n, "position", 0))
+            val_rules = extract_validation_rules(fmt_pattern, fmt_node.id)
+            entry_struct = extract_entry_structure(fmt_pattern, fmt_node.id)
+
+            output_section: Dict[str, Any] = {
+                "columns": [
+                    {"position": _prop(c, "position"), "name": _prop(c, "name")}
+                    for c in out_cols_sorted
+                ],
+                "validation_rules": [
+                    {
+                        "name": _prop(v, "name"),
+                        "expression": _prop(v, "expression"),
+                        "scope": _prop(v, "scope"),
+                    }
+                    for v in val_rules
+                ],
+            }
+            if entry_struct:
+                output_section["entry_structure"] = {
+                    "grouping_column": _prop(entry_struct, "grouping_column"),
+                    "entry_separator": _prop(entry_struct, "entry_separator"),
+                }
+            result["output_format"] = output_section
+
+    return result
+
+
+def summarize_format_load(pattern: GraphPattern, format_id: str) -> Dict[str, Any]:
+    """Summarize a loaded output format graph for the load_format tool response."""
+    result: Dict[str, Any] = {
+        "format_id": format_id,
+        "graph_structure": {
+            "total_nodes": len(pattern.nodes),
+            "total_relationships": len(pattern.relationships),
+        },
+    }
+
     fmt_node = _find_single_node_by_label(pattern, NodeLabel.OUTPUT_FORMAT)
     if fmt_node:
+        result["format_name"] = _prop(fmt_node, "name")
+        result["target_system"] = _prop(fmt_node, "target_system")
+        result["file_format"] = _prop(fmt_node, "file_format")
+
         out_cols = extract_output_columns(pattern, fmt_node.id)
         out_cols_sorted = sorted(out_cols, key=lambda n: _prop(n, "position", 0))
-        val_rules = extract_validation_rules(pattern, fmt_node.id)
-        batch_fmt = extract_batch_format(pattern, fmt_node.id)
+        result["columns"] = [
+            {"name": _prop(c, "name"), "position": _prop(c, "position")}
+            for c in out_cols_sorted
+        ]
 
-        output_section: Dict[str, Any] = {
-            "columns": [
-                {"position": _prop(c, "position"), "name": _prop(c, "name")}
-                for c in out_cols_sorted
-            ],
-            "validation_rules": [
-                {
-                    "name": _prop(v, "name"),
-                    "expression": _prop(v, "expression"),
-                    "scope": _prop(v, "scope"),
-                }
-                for v in val_rules
-            ],
-        }
-        if batch_fmt:
-            output_section["batch"] = {
-                "grouping_column": _prop(batch_fmt, "grouping_column"),
-                "entry_separator": _prop(batch_fmt, "entry_separator"),
+        val_rules = extract_validation_rules(pattern, fmt_node.id)
+        result["validation_rules"] = [
+            {
+                "name": _prop(v, "name"),
+                "expression": _prop(v, "expression"),
+                "scope": _prop(v, "scope"),
             }
-        result["output_format"] = output_section
+            for v in val_rules
+        ]
+
+        entry_struct = extract_entry_structure(pattern, fmt_node.id)
+        if entry_struct:
+            result["entry_structure"] = {
+                "grouping_column": _prop(entry_struct, "grouping_column"),
+                "entry_separator": _prop(entry_struct, "entry_separator"),
+                "date_column": _prop(entry_struct, "date_column"),
+            }
 
     return result
 

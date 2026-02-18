@@ -1,7 +1,8 @@
 # Spec: Measure Aggregation Properties Through Builder
 
-> **Status:** Ready
+> **Status:** Done
 > **Created:** 2026-02-16
+> **Completed:** 2026-02-17
 > **Spec type:** Feature
 
 ---
@@ -420,15 +421,15 @@ Current: 347 | Added: ~10 | New total: ~357
 
 ## Success Criteria
 
-- [ ] `group_by: ["col_a", "col_b"]` in JSON spec produces `group_by: "col_a,col_b"` on Measure node
-- [ ] `split_by` and `split_column` pass through from JSON spec to Measure node properties
-- [ ] `summarize_processing_instructions` emits `group_by` as a JSON array (split from comma-separated)
-- [ ] `summarize_processing_instructions` emits `split_by` and `split_column` when present
-- [ ] Omitting all three fields produces identical behavior to current code (backward compatible)
-- [ ] Empty `group_by: []` does not store a property (same as omitting)
-- [ ] Full pipeline round-trip: build spec with fields -> save -> load -> instructions include fields
-- [ ] All existing tests pass (no regressions)
-- [ ] No canonical count changes needed (no new enums, schemas, or constraints)
+- [x] `group_by: ["col_a", "col_b"]` in JSON spec produces `group_by: "col_a,col_b"` on Measure node
+- [x] `split_by` and `split_column` pass through from JSON spec to Measure node properties
+- [x] `summarize_processing_instructions` emits `group_by` as a JSON array (split from comma-separated)
+- [x] `summarize_processing_instructions` emits `split_by` and `split_column` when present
+- [x] Omitting all three fields produces identical behavior to current code (backward compatible)
+- [x] Empty `group_by: []` does not store a property (same as omitting)
+- [x] Full pipeline round-trip: build spec with fields -> save -> load -> instructions include fields
+- [x] All existing tests pass (no regressions)
+- [x] No canonical count changes needed (no new enums, schemas, or constraints)
 
 ---
 

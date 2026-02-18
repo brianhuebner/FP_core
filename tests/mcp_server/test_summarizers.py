@@ -15,6 +15,7 @@ from mcp_server.summarizers import (
     _prop,
     _resolve_account_for_slot,
     summarize_build_result,
+    summarize_format_load,
     summarize_processing_instructions,
     summarize_recipe_load,
     summarize_validation_result,
@@ -34,7 +35,7 @@ def _minimal_pipeline() -> GraphPattern:
     Same structure as load_payroll.py:
     - 1 SourceSchema + 6 Columns + 3 Measures (+ AGGREGATES)
     - 1 AccountingRecipe + 3 MappingRules + 6 AccountSlots + 4 Accounts
-    - 1 OutputFormat + 6 OutputColumns + 1 ValidationRule + 1 BatchFormat
+    - 1 OutputFormat + 6 OutputColumns + 1 ValidationRule + 1 EntryStructure
     Total: 27 nodes, 36 relationships (approx, matching load_payroll.py)
     """
     # --- Source Schema ---
@@ -230,7 +231,7 @@ def _minimal_pipeline() -> GraphPattern:
     output_fmt = Node(
         id="fmt_journal", labels={NodeLabel.OUTPUT_FORMAT},
         properties={
-            "recipe_id": RECIPE_ID, "name": "journal_entry_export",
+            "format_id": FORMAT_ID, "name": "journal_entry_export",
             "target_system": "quickbooks", "file_format": "csv", "version": "1.0",
         },
     )
@@ -274,32 +275,100 @@ def _minimal_pipeline() -> GraphPattern:
         Relationship(id="rel_has_val", type=RelationshipType.HAS_VALIDATION,
                      start_node_id="fmt_journal", end_node_id="val_balance", properties={}),
     ]
-    batch = Node(id="batch_payroll", labels={NodeLabel.BATCH_FORMAT}, properties={
-        "recipe_id": RECIPE_ID, "entry_separator": "blank_row",
+    entry_struct = Node(id="entry_payroll", labels={NodeLabel.ENTRY_STRUCTURE}, properties={
+        "format_id": FORMAT_ID, "entry_separator": "blank_row",
         "grouping_column": "journal_number", "date_column": "journal_date",
     })
-    batch_rel = Relationship(
-        id="rel_has_batch", type=RelationshipType.HAS_BATCH_FORMAT,
-        start_node_id="fmt_journal", end_node_id="batch_payroll", properties={},
+    entry_struct_rel = Relationship(
+        id="rel_has_entry", type=RelationshipType.HAS_ENTRY_STRUCTURE,
+        start_node_id="fmt_journal", end_node_id="entry_payroll", properties={},
     )
 
     # Assemble all nodes and relationships
     all_nodes = (
         [schema] + columns + measures
         + [recipe] + rules + slots + accounts
-        + [output_fmt] + out_columns + [val_rule, batch]
+        + [output_fmt] + out_columns + [val_rule, entry_struct]
     )
     all_rels = (
         col_rels + msr_rels + agg_rels
         + [transforms_rel] + rule_rels + slot_rels
-        + out_col_rels + val_rels + [batch_rel]
+        + out_col_rels + val_rels + [entry_struct_rel]
     )
+    return GraphPattern(nodes=all_nodes, relationships=all_rels)
+
+
+def _minimal_format() -> GraphPattern:
+    """Build a standalone output format graph for testing format-related summarizers."""
+    output_fmt = Node(
+        id="fmt_journal", labels={NodeLabel.OUTPUT_FORMAT},
+        properties={
+            "format_id": FORMAT_ID, "name": "journal_entry_export",
+            "target_system": "quickbooks", "file_format": "csv", "version": "1.0",
+        },
+    )
+    out_columns = [
+        Node(id="ocol_journal_no", labels={NodeLabel.OUTPUT_COLUMN}, properties={
+            "format_id": FORMAT_ID, "name": "journal_number", "position": 1,
+            "data_type": "string", "required": True,
+        }),
+        Node(id="ocol_date", labels={NodeLabel.OUTPUT_COLUMN}, properties={
+            "format_id": FORMAT_ID, "name": "journal_date", "position": 2,
+            "data_type": "date", "required": True,
+        }),
+        Node(id="ocol_account", labels={NodeLabel.OUTPUT_COLUMN}, properties={
+            "format_id": FORMAT_ID, "name": "account_code", "position": 3,
+            "data_type": "string", "required": True,
+        }),
+        Node(id="ocol_debit", labels={NodeLabel.OUTPUT_COLUMN}, properties={
+            "format_id": FORMAT_ID, "name": "debit_amount", "position": 4,
+            "data_type": "decimal", "required": True,
+        }),
+        Node(id="ocol_credit", labels={NodeLabel.OUTPUT_COLUMN}, properties={
+            "format_id": FORMAT_ID, "name": "credit_amount", "position": 5,
+            "data_type": "decimal", "required": True,
+        }),
+        Node(id="ocol_memo", labels={NodeLabel.OUTPUT_COLUMN}, properties={
+            "format_id": FORMAT_ID, "name": "memo", "position": 6,
+            "data_type": "string", "required": False,
+        }),
+    ]
+    out_col_rels = [
+        Relationship(id=f"rel_fmt_col_{c.id}", type=RelationshipType.HAS_COLUMN,
+                     start_node_id="fmt_journal", end_node_id=c.id, properties={})
+        for c in out_columns
+    ]
+    val_rule = Node(id="val_balance", labels={NodeLabel.VALIDATION_RULE}, properties={
+        "format_id": FORMAT_ID, "name": "balanced_entry",
+        "expression": "SUM(debit_amount) == SUM(credit_amount)",
+        "scope": "batch",
+    })
+    val_rels = [
+        Relationship(id="rel_has_val", type=RelationshipType.HAS_VALIDATION,
+                     start_node_id="fmt_journal", end_node_id="val_balance", properties={}),
+    ]
+    entry_struct = Node(id="entry_payroll", labels={NodeLabel.ENTRY_STRUCTURE}, properties={
+        "format_id": FORMAT_ID, "entry_separator": "blank_row",
+        "grouping_column": "journal_number", "date_column": "journal_date",
+    })
+    entry_struct_rel = Relationship(
+        id="rel_has_entry", type=RelationshipType.HAS_ENTRY_STRUCTURE,
+        start_node_id="fmt_journal", end_node_id="entry_payroll", properties={},
+    )
+
+    all_nodes = [output_fmt] + out_columns + [val_rule, entry_struct]
+    all_rels = out_col_rels + val_rels + [entry_struct_rel]
     return GraphPattern(nodes=all_nodes, relationships=all_rels)
 
 
 @pytest.fixture
 def pipeline():
     return _minimal_pipeline()
+
+
+@pytest.fixture
+def format_pattern():
+    return _minimal_format()
 
 
 @pytest.fixture
@@ -465,16 +534,10 @@ class TestSummarizeRecipeLoad:
         result = summarize_recipe_load(pipeline, RECIPE_ID)
         assert result["recipe_name"] == "Monthly Payroll Journal"
 
-    def test_output_has_columns(self, pipeline):
+    def test_no_output_in_recipe_load(self, pipeline):
+        """Recipe load should not include output format section (formats are independent)."""
         result = summarize_recipe_load(pipeline, RECIPE_ID)
-        output = result["output"]
-        assert output["name"] == "journal_entry_export"
-        assert output["target_system"] == "quickbooks"
-        assert output["file_format"] == "csv"
-        assert len(output["columns"]) == 6
-        # Columns sorted by position
-        positions = [c["position"] for c in output["columns"]]
-        assert positions == sorted(positions)
+        assert "output" not in result
 
     def test_handles_empty_pattern(self, empty_pattern):
         result = summarize_recipe_load(empty_pattern, RECIPE_ID)
@@ -482,21 +545,6 @@ class TestSummarizeRecipeLoad:
         assert result["graph_structure"]["total_nodes"] == 0
         assert "schema" not in result
         assert "recipe" not in result
-        assert "output" not in result
-
-    def test_handles_missing_output(self):
-        """Pattern with schema+recipe but no output format."""
-        schema = Node(id="s1", labels={NodeLabel.SOURCE_SCHEMA}, properties={
-            "recipe_id": "test", "name": "test_schema", "source_system": "csv_import",
-        })
-        recipe = Node(id="r1", labels={NodeLabel.ACCOUNTING_RECIPE}, properties={
-            "recipe_id": "test", "name": "Test Recipe", "source_schema": "test_schema",
-        })
-        pattern = GraphPattern(nodes=[schema, recipe], relationships=[])
-        result = summarize_recipe_load(pattern, "test")
-        assert "schema" in result
-        assert "recipe" in result
-        assert "output" not in result
 
 
 # ============================================================================
@@ -548,23 +596,28 @@ class TestSummarizeProcessingInstructions:
         for rule in result["rules"]:
             assert rule["memo_template"] is not None
 
-    def test_output_columns_sorted_by_position(self, pipeline):
-        result = summarize_processing_instructions(pipeline, RECIPE_ID)
+    def test_output_columns_sorted_by_position(self, pipeline, format_pattern):
+        result = summarize_processing_instructions(pipeline, RECIPE_ID, format_pattern=format_pattern)
         output = result["output_format"]
         positions = [c["position"] for c in output["columns"]]
         assert positions == [1, 2, 3, 4, 5, 6]
 
-    def test_output_has_validation_rules(self, pipeline):
-        result = summarize_processing_instructions(pipeline, RECIPE_ID)
+    def test_output_has_validation_rules(self, pipeline, format_pattern):
+        result = summarize_processing_instructions(pipeline, RECIPE_ID, format_pattern=format_pattern)
         val_rules = result["output_format"]["validation_rules"]
         assert len(val_rules) == 1
         assert val_rules[0]["name"] == "balanced_entry"
 
-    def test_output_has_batch_info(self, pipeline):
+    def test_output_has_entry_structure(self, pipeline, format_pattern):
+        result = summarize_processing_instructions(pipeline, RECIPE_ID, format_pattern=format_pattern)
+        entry = result["output_format"]["entry_structure"]
+        assert entry["grouping_column"] == "journal_number"
+        assert entry["entry_separator"] == "blank_row"
+
+    def test_no_output_without_format_pattern(self, pipeline):
+        """Without format_pattern, processing instructions omit output_format."""
         result = summarize_processing_instructions(pipeline, RECIPE_ID)
-        batch = result["output_format"]["batch"]
-        assert batch["grouping_column"] == "journal_number"
-        assert batch["entry_separator"] == "blank_row"
+        assert "output_format" not in result
 
     def test_handles_missing_components(self, empty_pattern):
         result = summarize_processing_instructions(empty_pattern, RECIPE_ID)
@@ -573,10 +626,49 @@ class TestSummarizeProcessingInstructions:
         assert "rules" not in result
         assert "output_format" not in result
 
-    def test_handles_no_batch_format(self):
-        """Output format without batch format omits the batch key."""
+    def test_measure_group_by_emitted(self, pipeline):
+        """group_by comma string on Measure node is split into array in output."""
+        # Add group_by to the first measure node
+        for n in pipeline.nodes:
+            if NodeLabel.MEASURE in n.labels and n.properties["name"] == "total_gross_pay":
+                n.properties["group_by"] = "pay_date,location"
+                break
+        result = summarize_processing_instructions(pipeline, RECIPE_ID)
+        gross_measure = next(m for m in result["measures"] if m["name"] == "total_gross_pay")
+        assert gross_measure["group_by"] == ["pay_date", "location"]
+
+    def test_measure_split_by_emitted(self, pipeline):
+        """split_by on Measure node appears in output."""
+        for n in pipeline.nodes:
+            if NodeLabel.MEASURE in n.labels and n.properties["name"] == "total_gross_pay":
+                n.properties["split_by"] = "department"
+                break
+        result = summarize_processing_instructions(pipeline, RECIPE_ID)
+        gross_measure = next(m for m in result["measures"] if m["name"] == "total_gross_pay")
+        assert gross_measure["split_by"] == "department"
+
+    def test_measure_split_column_emitted(self, pipeline):
+        """split_column on Measure node appears in output."""
+        for n in pipeline.nodes:
+            if NodeLabel.MEASURE in n.labels and n.properties["name"] == "total_gross_pay":
+                n.properties["split_column"] = "dept_code"
+                break
+        result = summarize_processing_instructions(pipeline, RECIPE_ID)
+        gross_measure = next(m for m in result["measures"] if m["name"] == "total_gross_pay")
+        assert gross_measure["split_column"] == "dept_code"
+
+    def test_measure_no_aggregation_fields(self, pipeline):
+        """Measures without group_by/split_by/split_column omit those keys (backward compat)."""
+        result = summarize_processing_instructions(pipeline, RECIPE_ID)
+        for m in result["measures"]:
+            assert "group_by" not in m
+            assert "split_by" not in m
+            assert "split_column" not in m
+
+    def test_handles_no_entry_structure(self):
+        """Output format without entry structure omits the entry_structure key."""
         fmt = Node(id="fmt1", labels={NodeLabel.OUTPUT_FORMAT}, properties={
-            "recipe_id": "test", "name": "test_fmt",
+            "format_id": "test", "name": "test_fmt",
             "target_system": "test", "file_format": "csv",
         })
         ocol = Node(id="oc1", labels={NodeLabel.OUTPUT_COLUMN}, properties={
@@ -584,10 +676,12 @@ class TestSummarizeProcessingInstructions:
         })
         rel = Relationship(id="r1", type=RelationshipType.HAS_COLUMN,
                            start_node_id="fmt1", end_node_id="oc1", properties={})
-        pattern = GraphPattern(nodes=[fmt, ocol], relationships=[rel])
-        result = summarize_processing_instructions(pattern, "test")
+        fmt_pattern = GraphPattern(nodes=[fmt, ocol], relationships=[rel])
+        result = summarize_processing_instructions(
+            GraphPattern(nodes=[], relationships=[]), "test", format_pattern=fmt_pattern,
+        )
         output = result["output_format"]
-        assert "batch" not in output
+        assert "entry_structure" not in output
         assert len(output["columns"]) == 1
 
 
@@ -691,3 +785,51 @@ class TestSummarizeValidationResult:
         assert result["gate2_validation"]["entries_checked"] == 0
         assert result["gate2_validation"]["accounts_checked"] == 0
         assert result["entry_details"] == []
+
+
+# ============================================================================
+# TestSummarizeFormatLoad
+# ============================================================================
+
+class TestSummarizeFormatLoad:
+    def test_has_format_id(self, format_pattern):
+        result = summarize_format_load(format_pattern, FORMAT_ID)
+        assert result["format_id"] == FORMAT_ID
+
+    def test_graph_structure_counts(self, format_pattern):
+        result = summarize_format_load(format_pattern, FORMAT_ID)
+        gs = result["graph_structure"]
+        assert gs["total_nodes"] == len(format_pattern.nodes)
+        assert gs["total_relationships"] == len(format_pattern.relationships)
+
+    def test_format_name(self, format_pattern):
+        result = summarize_format_load(format_pattern, FORMAT_ID)
+        assert result["format_name"] == "journal_entry_export"
+
+    def test_target_system_and_file_format(self, format_pattern):
+        result = summarize_format_load(format_pattern, FORMAT_ID)
+        assert result["target_system"] == "quickbooks"
+        assert result["file_format"] == "csv"
+
+    def test_columns_sorted_by_position(self, format_pattern):
+        result = summarize_format_load(format_pattern, FORMAT_ID)
+        assert len(result["columns"]) == 6
+        positions = [c["position"] for c in result["columns"]]
+        assert positions == [1, 2, 3, 4, 5, 6]
+
+    def test_validation_rules(self, format_pattern):
+        result = summarize_format_load(format_pattern, FORMAT_ID)
+        assert len(result["validation_rules"]) == 1
+        assert result["validation_rules"][0]["name"] == "balanced_entry"
+
+    def test_entry_structure(self, format_pattern):
+        result = summarize_format_load(format_pattern, FORMAT_ID)
+        assert result["entry_structure"]["grouping_column"] == "journal_number"
+        assert result["entry_structure"]["entry_separator"] == "blank_row"
+        assert result["entry_structure"]["date_column"] == "journal_date"
+
+    def test_empty_pattern(self, empty_pattern):
+        result = summarize_format_load(empty_pattern, "test")
+        assert result["format_id"] == "test"
+        assert result["graph_structure"]["total_nodes"] == 0
+        assert "format_name" not in result
