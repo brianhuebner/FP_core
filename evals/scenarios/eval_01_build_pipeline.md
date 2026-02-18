@@ -16,7 +16,7 @@ Read the file `evals/fixtures/knowledge_zone/chart_of_accounts.json` for the ava
 
 ## Accounting Requirements
 
-Build journal entries for three transactions per pay period:
+Build journal entries for four transactions per pay period:
 
 1. **Gross Pay Recognition** — Record salary expense
    - Debit: Salary Expense (the expense account)
@@ -29,6 +29,17 @@ Build journal entries for three transactions per pay period:
 3. **Net Pay Disbursement** — Record the actual payment to employees
    - Debit: Payroll Payable (reduces the payroll liability)
    - Credit: Cash (asset reduction from payment)
+
+4. **Benefits Expense Accrual (Engineering Only)** — Accrue employer-paid benefits for
+   Engineering department employees
+   - Debit: Benefits Expense
+   - Credit: Benefits Payable
+   - This rule **must** use a `when` condition — not a filter on the measure. Define a
+     condition with `condition_id: "is_engineering"`, `column: "department"`,
+     `operator: "equals"`, `value: "Engineering"`. Reference it from the rule via the
+     `when` field.
+   - The `conditions` array and `when` field belong in the **recipe** section of the spec
+     (not the schema section).
 
 Each transaction uses a SUM measure that aggregates the corresponding column across all employee rows.
 
@@ -49,9 +60,13 @@ Include a validation rule that checks SUM(debit_amount) == SUM(credit_amount) pe
 1. First, read the MCP resource `ontology://merged` to understand the required and optional properties for each node type
 2. Read the source data CSV to understand column names and data types
 3. Read the chart of accounts to identify the correct account codes
-4. Build a complete pipeline JSON spec following the ontology requirements
+4. Build a complete pipeline JSON spec following the ontology requirements. The recipe
+   section must include a `conditions` array and at least one rule must have a `when`
+   field referencing a condition by its `condition_id`.
 5. Call `build_and_save_pipeline` with your spec
 6. If validation fails, fix the specific errors and retry
-7. After successful save, call `load_recipe` with the recipe_id to verify the round-trip
+7. After successful save, call `load_recipe` with the recipe_id to verify the round-trip.
+   Also call `get_processing_instructions` and confirm the conditional rule shows a
+   `conditions` array in its output.
 
 Report the final result: whether the pipeline was saved successfully, how many nodes and relationships were created, and any warnings.
