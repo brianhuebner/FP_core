@@ -149,66 +149,67 @@ class TestGenerateNodeId:
 
 class TestBuildSchemaNodes:
     def test_returns_schema_node(self, schema_spec):
-        schema_node, _, _, _, _ = _build_schema_nodes(schema_spec, RECIPE_ID)
+        schema_node, _, _, _ = _build_schema_nodes(schema_spec, RECIPE_ID)
         assert NodeLabel.SOURCE_SCHEMA in schema_node.labels
         assert schema_node.properties["name"] == "payroll_export"
         assert schema_node.properties["recipe_id"] == RECIPE_ID
 
     def test_returns_correct_column_count(self, schema_spec):
-        _, columns, _, _, _ = _build_schema_nodes(schema_spec, RECIPE_ID)
+        _, columns, _, _ = _build_schema_nodes(schema_spec, RECIPE_ID)
         assert len(columns) == 6
 
     def test_columns_have_correct_properties(self, schema_spec):
-        _, columns, _, _, _ = _build_schema_nodes(schema_spec, RECIPE_ID)
+        _, columns, _, _ = _build_schema_nodes(schema_spec, RECIPE_ID)
         col_names = {c.properties["name"] for c in columns}
         assert "gross_pay" in col_names
         assert "employee_id" in col_names
 
     def test_returns_correct_measure_count(self, schema_spec):
-        _, _, measures, _, _ = _build_schema_nodes(schema_spec, RECIPE_ID)
+        _, _, measures, _ = _build_schema_nodes(schema_spec, RECIPE_ID)
         assert len(measures) == 3
 
     def test_measures_have_correct_properties(self, schema_spec):
-        _, _, measures, _, _ = _build_schema_nodes(schema_spec, RECIPE_ID)
+        _, _, measures, _ = _build_schema_nodes(schema_spec, RECIPE_ID)
         names = {m.properties["name"] for m in measures}
         assert "total_gross_pay" in names
 
     def test_has_column_relationships(self, schema_spec):
-        _, _, _, _, rels = _build_schema_nodes(schema_spec, RECIPE_ID)
+        _, _, _, rels = _build_schema_nodes(schema_spec, RECIPE_ID)
         col_rels = [r for r in rels if r.type == RelationshipType.HAS_COLUMN]
         assert len(col_rels) == 6
 
     def test_has_measure_relationships(self, schema_spec):
-        _, _, _, _, rels = _build_schema_nodes(schema_spec, RECIPE_ID)
+        _, _, _, rels = _build_schema_nodes(schema_spec, RECIPE_ID)
         msr_rels = [r for r in rels if r.type == RelationshipType.HAS_MEASURE]
         assert len(msr_rels) == 3
 
     def test_aggregates_relationships(self, schema_spec):
-        _, _, _, _, rels = _build_schema_nodes(schema_spec, RECIPE_ID)
+        _, _, _, rels = _build_schema_nodes(schema_spec, RECIPE_ID)
         agg_rels = [r for r in rels if r.type == RelationshipType.AGGREGATES]
         assert len(agg_rels) == 3
 
     def test_optional_properties(self, schema_spec):
-        schema_node, _, _, _, _ = _build_schema_nodes(schema_spec, RECIPE_ID)
+        schema_node, _, _, _ = _build_schema_nodes(schema_spec, RECIPE_ID)
         assert schema_node.properties["file_pattern"] == "payroll_*.csv"
         assert schema_node.properties["row_grain"] == "employee_pay_period"
 
     def test_optional_properties_absent(self):
         minimal = {"name": "test", "source_system": "csv_import", "columns": [], "measures": []}
-        schema_node, _, _, _, _ = _build_schema_nodes(minimal, "test_id")
+        schema_node, _, _, _ = _build_schema_nodes(minimal, "test_id")
         assert "file_pattern" not in schema_node.properties
         assert "row_grain" not in schema_node.properties
 
-    def test_empty_conditions(self, schema_spec):
-        _, _, _, conditions, _ = _build_schema_nodes(schema_spec, RECIPE_ID)
-        assert len(conditions) == 0
+    def test_no_conditions_in_schema_nodes(self, schema_spec):
+        """_build_schema_nodes no longer returns conditions — moved to _build_recipe_nodes."""
+        result = _build_schema_nodes(schema_spec, RECIPE_ID)
+        assert len(result) == 4  # schema_node, col_nodes, msr_nodes, rels (no conditions)
 
     def test_measure_group_by_single_column(self):
         spec = {
             "name": "test", "source_system": "csv_import", "columns": [],
             "measures": [{"name": "total", "operation": "sum", "group_by": ["pay_date"]}],
         }
-        _, _, measures, _, _ = _build_schema_nodes(spec, "test_id")
+        _, _, measures, _ = _build_schema_nodes(spec, "test_id")
         assert measures[0].properties["group_by"] == "pay_date"
 
     def test_measure_group_by_multiple_columns(self):
@@ -216,7 +217,7 @@ class TestBuildSchemaNodes:
             "name": "test", "source_system": "csv_import", "columns": [],
             "measures": [{"name": "total", "operation": "sum", "group_by": ["pay_date", "location"]}],
         }
-        _, _, measures, _, _ = _build_schema_nodes(spec, "test_id")
+        _, _, measures, _ = _build_schema_nodes(spec, "test_id")
         assert measures[0].properties["group_by"] == "pay_date,location"
 
     def test_measure_group_by_empty_array(self):
@@ -224,7 +225,7 @@ class TestBuildSchemaNodes:
             "name": "test", "source_system": "csv_import", "columns": [],
             "measures": [{"name": "total", "operation": "sum", "group_by": []}],
         }
-        _, _, measures, _, _ = _build_schema_nodes(spec, "test_id")
+        _, _, measures, _ = _build_schema_nodes(spec, "test_id")
         assert "group_by" not in measures[0].properties
 
     def test_measure_split_by(self):
@@ -232,7 +233,7 @@ class TestBuildSchemaNodes:
             "name": "test", "source_system": "csv_import", "columns": [],
             "measures": [{"name": "total", "operation": "sum", "split_by": "department"}],
         }
-        _, _, measures, _, _ = _build_schema_nodes(spec, "test_id")
+        _, _, measures, _ = _build_schema_nodes(spec, "test_id")
         assert measures[0].properties["split_by"] == "department"
 
     def test_measure_split_column(self):
@@ -240,7 +241,7 @@ class TestBuildSchemaNodes:
             "name": "test", "source_system": "csv_import", "columns": [],
             "measures": [{"name": "total", "operation": "sum", "split_column": "department"}],
         }
-        _, _, measures, _, _ = _build_schema_nodes(spec, "test_id")
+        _, _, measures, _ = _build_schema_nodes(spec, "test_id")
         assert measures[0].properties["split_column"] == "department"
 
     def test_measure_all_aggregation_fields(self):
@@ -253,7 +254,7 @@ class TestBuildSchemaNodes:
                 "split_column": "dept_code",
             }],
         }
-        _, _, measures, _, _ = _build_schema_nodes(spec, "test_id")
+        _, _, measures, _ = _build_schema_nodes(spec, "test_id")
         m = measures[0]
         assert m.properties["group_by"] == "pay_date,location"
         assert m.properties["split_by"] == "department"
@@ -266,22 +267,22 @@ class TestBuildSchemaNodes:
 
 class TestBuildRecipeNodes:
     def test_returns_recipe_node(self, recipe_spec):
-        recipe_node, _, _, _, _, _ = _build_recipe_nodes(recipe_spec, "schema_id", RECIPE_ID)
+        recipe_node, _, _, _, _, _, _ = _build_recipe_nodes(recipe_spec, "schema_id", RECIPE_ID)
         assert NodeLabel.ACCOUNTING_RECIPE in recipe_node.labels
         assert recipe_node.properties["name"] == "Monthly Payroll Journal"
 
     def test_returns_correct_rule_count(self, recipe_spec):
-        _, rules, _, _, _, _ = _build_recipe_nodes(recipe_spec, "schema_id", RECIPE_ID)
+        _, rules, _, _, _, _, _ = _build_recipe_nodes(recipe_spec, "schema_id", RECIPE_ID)
         assert len(rules) == 3
 
     def test_returns_correct_slot_count(self, recipe_spec):
-        _, _, slots, _, _, _ = _build_recipe_nodes(recipe_spec, "schema_id", RECIPE_ID)
+        _, _, slots, _, _, _, _ = _build_recipe_nodes(recipe_spec, "schema_id", RECIPE_ID)
         # 3 rules × 2 slots (debit + credit) = 6
         assert len(slots) == 6
 
     def test_account_deduplication(self, recipe_spec):
         """Account 2100 (Payroll Payable) appears in 3 rules but should be deduplicated."""
-        _, _, _, accounts, _, _ = _build_recipe_nodes(recipe_spec, "schema_id", RECIPE_ID)
+        _, _, _, accounts, _, _, _ = _build_recipe_nodes(recipe_spec, "schema_id", RECIPE_ID)
         account_codes = [a.properties["code"] for a in accounts]
         assert len(account_codes) == len(set(account_codes))
         assert "2100" in account_codes
@@ -289,25 +290,25 @@ class TestBuildRecipeNodes:
         assert len(accounts) == 4
 
     def test_has_rule_relationships(self, recipe_spec):
-        _, _, _, _, _, rels = _build_recipe_nodes(recipe_spec, "schema_id", RECIPE_ID)
+        _, _, _, _, _, _, rels = _build_recipe_nodes(recipe_spec, "schema_id", RECIPE_ID)
         has_rule_rels = [r for r in rels if r.type == RelationshipType.HAS_RULE]
         assert len(has_rule_rels) == 3
 
     def test_debits_credits_relationships(self, recipe_spec):
-        _, _, _, _, _, rels = _build_recipe_nodes(recipe_spec, "schema_id", RECIPE_ID)
+        _, _, _, _, _, _, rels = _build_recipe_nodes(recipe_spec, "schema_id", RECIPE_ID)
         debit_rels = [r for r in rels if r.type == RelationshipType.DEBITS]
         credit_rels = [r for r in rels if r.type == RelationshipType.CREDITS]
         assert len(debit_rels) == 3
         assert len(credit_rels) == 3
 
     def test_mapped_to_relationships(self, recipe_spec):
-        _, _, _, _, _, rels = _build_recipe_nodes(recipe_spec, "schema_id", RECIPE_ID)
+        _, _, _, _, _, _, rels = _build_recipe_nodes(recipe_spec, "schema_id", RECIPE_ID)
         mapped_rels = [r for r in rels if r.type == RelationshipType.MAPPED_TO]
         # 6 slots, each mapped to an account
         assert len(mapped_rels) == 6
 
     def test_transforms_relationship(self, recipe_spec):
-        _, _, _, _, _, rels = _build_recipe_nodes(recipe_spec, "schema_id", RECIPE_ID)
+        _, _, _, _, _, _, rels = _build_recipe_nodes(recipe_spec, "schema_id", RECIPE_ID)
         transforms = [r for r in rels if r.type == RelationshipType.TRANSFORMS]
         assert len(transforms) == 1
         assert transforms[0].end_node_id == "schema_id"
@@ -331,7 +332,7 @@ class TestBuildRecipeNodes:
                 {"id": "dept_lookup", "type": "DepartmentLookup", "properties": {"source": "hr_system"}},
             ],
         }
-        _, _, _, _, ref_nodes, rels = _build_recipe_nodes(spec, "schema_id", "test_recipe")
+        _, _, _, _, ref_nodes, _, rels = _build_recipe_nodes(spec, "schema_id", "test_recipe")
         assert len(ref_nodes) == 1
         assert NodeLabel.REFERENCE in ref_nodes[0].labels
         assert "DepartmentLookup" in ref_nodes[0].extra_labels
@@ -341,13 +342,134 @@ class TestBuildRecipeNodes:
 
     def test_empty_rules_list(self):
         spec = {"name": "Empty Recipe", "source_schema": "test", "rules": []}
-        recipe_node, rules, slots, accounts, refs, rels = _build_recipe_nodes(spec, "schema_id", "test")
+        recipe_node, rules, slots, accounts, refs, cond_nodes, rels = _build_recipe_nodes(spec, "schema_id", "test")
         assert len(rules) == 0
         assert len(slots) == 0
         assert len(accounts) == 0
+        assert len(cond_nodes) == 0
         # Only TRANSFORMS rel
         assert len(rels) == 1
         assert rels[0].type == RelationshipType.TRANSFORMS
+
+    def test_conditions_built_in_recipe(self):
+        """Conditions defined in recipe.conditions[] become Condition nodes."""
+        spec = {
+            "name": "Test Recipe",
+            "source_schema": "test_schema",
+            "conditions": [
+                {"condition_id": "is_paid", "column": "status", "operator": "equals", "value": "paid"},
+            ],
+            "rules": [],
+        }
+        _, _, _, _, _, cond_nodes, _ = _build_recipe_nodes(spec, "schema_id", "cond_recipe")
+        assert len(cond_nodes) == 1
+        assert NodeLabel.CONDITION in cond_nodes[0].labels
+        assert cond_nodes[0].properties["condition_id"] == "is_paid"
+        assert cond_nodes[0].properties["column"] == "status"
+        assert cond_nodes[0].properties["operator"] == "equals"
+        assert cond_nodes[0].properties["value"] == "paid"
+
+    def test_when_relationship_created(self):
+        """Rule with 'when' field generates a WHEN relationship to the condition."""
+        spec = {
+            "name": "Test Recipe",
+            "source_schema": "test_schema",
+            "conditions": [
+                {"condition_id": "is_paid", "column": "status", "operator": "equals", "value": "paid"},
+            ],
+            "rules": [
+                {
+                    "rule_name": "paid_rule",
+                    "source_measure": "total",
+                    "priority": 1,
+                    "when": "is_paid",
+                    "debit": {"slot_id": "dr", "role": "primary", "account_code": "5000", "account_name": "Expense", "account_type": "expense", "normal_balance": "debit"},
+                    "credit": {"slot_id": "cr", "role": "offset", "account_code": "2000", "account_name": "AP", "account_type": "liability", "normal_balance": "credit"},
+                },
+            ],
+        }
+        _, _, _, _, _, _, rels = _build_recipe_nodes(spec, "schema_id", "when_recipe")
+        when_rels = [r for r in rels if r.type == RelationshipType.WHEN]
+        assert len(when_rels) == 1
+
+    def test_when_target_uses_map(self):
+        """WHEN edge end_node_id matches the generated condition node ID, not the condition_id string."""
+        spec = {
+            "name": "Test Recipe",
+            "source_schema": "test_schema",
+            "conditions": [
+                {"condition_id": "is_paid", "column": "status", "operator": "equals", "value": "paid"},
+            ],
+            "rules": [
+                {
+                    "rule_name": "paid_rule",
+                    "source_measure": "total",
+                    "priority": 1,
+                    "when": "is_paid",
+                    "debit": {"slot_id": "dr", "role": "primary", "account_code": "5000", "account_name": "Expense", "account_type": "expense", "normal_balance": "debit"},
+                    "credit": {"slot_id": "cr", "role": "offset", "account_code": "2000", "account_name": "AP", "account_type": "liability", "normal_balance": "credit"},
+                },
+            ],
+        }
+        _, _, _, _, _, cond_nodes, rels = _build_recipe_nodes(spec, "schema_id", "map_recipe")
+        when_rels = [r for r in rels if r.type == RelationshipType.WHEN]
+        assert len(when_rels) == 1
+        assert when_rels[0].end_node_id == cond_nodes[0].id
+
+    def test_when_unknown_condition_no_edge(self):
+        """Rule with 'when' referencing an undefined condition creates no WHEN edge and does not crash."""
+        spec = {
+            "name": "Test Recipe",
+            "source_schema": "test_schema",
+            "conditions": [],
+            "rules": [
+                {
+                    "rule_name": "paid_rule",
+                    "source_measure": "total",
+                    "priority": 1,
+                    "when": "nonexistent_condition",
+                    "debit": {"slot_id": "dr", "role": "primary", "account_code": "5000", "account_name": "Expense", "account_type": "expense", "normal_balance": "debit"},
+                    "credit": {"slot_id": "cr", "role": "offset", "account_code": "2000", "account_name": "AP", "account_type": "liability", "normal_balance": "credit"},
+                },
+            ],
+        }
+        _, _, _, _, _, _, rels = _build_recipe_nodes(spec, "schema_id", "no_cond_recipe")
+        when_rels = [r for r in rels if r.type == RelationshipType.WHEN]
+        assert len(when_rels) == 0
+
+    def test_shared_condition_two_rules(self):
+        """Two rules sharing one condition produce two WHEN edges."""
+        spec = {
+            "name": "Test Recipe",
+            "source_schema": "test_schema",
+            "conditions": [
+                {"condition_id": "is_paid", "column": "status", "operator": "equals", "value": "paid"},
+            ],
+            "rules": [
+                {
+                    "rule_name": "rule_a",
+                    "source_measure": "total",
+                    "priority": 1,
+                    "when": "is_paid",
+                    "debit": {"slot_id": "dr_a", "role": "primary", "account_code": "5000", "account_name": "Expense", "account_type": "expense", "normal_balance": "debit"},
+                    "credit": {"slot_id": "cr_a", "role": "offset", "account_code": "2000", "account_name": "AP", "account_type": "liability", "normal_balance": "credit"},
+                },
+                {
+                    "rule_name": "rule_b",
+                    "source_measure": "total",
+                    "priority": 2,
+                    "when": "is_paid",
+                    "debit": {"slot_id": "dr_b", "role": "primary", "account_code": "5001", "account_name": "Expense2", "account_type": "expense", "normal_balance": "debit"},
+                    "credit": {"slot_id": "cr_b", "role": "offset", "account_code": "2001", "account_name": "AP2", "account_type": "liability", "normal_balance": "credit"},
+                },
+            ],
+        }
+        _, _, _, _, _, cond_nodes, rels = _build_recipe_nodes(spec, "schema_id", "shared_cond")
+        assert len(cond_nodes) == 1
+        when_rels = [r for r in rels if r.type == RelationshipType.WHEN]
+        assert len(when_rels) == 2
+        # Both WHEN rels point to the same condition node
+        assert all(r.end_node_id == cond_nodes[0].id for r in when_rels)
 
 
 # ============================================================================
@@ -646,3 +768,123 @@ class TestBuildFormatFromSpec:
         pattern = build_format_from_spec(spec)
         entry_nodes = [n for n in pattern.nodes if NodeLabel.ENTRY_STRUCTURE in n.labels]
         assert len(entry_nodes) == 0
+
+
+# ============================================================================
+# TestBuildPipelineConditions
+# ============================================================================
+
+class TestBuildPipelineConditions:
+    def test_full_pipeline_with_conditions(self):
+        """End-to-end: pipeline spec with conditions produces valid graph with CONDITION + WHEN nodes."""
+        spec = {
+            "recipe_id": "cond_pipeline",
+            "schema": {
+                "name": "charges",
+                "source_system": "stripe",
+                "columns": [
+                    {"name": "amount", "position": 1, "data_type": "decimal", "role": "amount", "required": True},
+                    {"name": "status", "position": 2, "data_type": "string", "role": "category", "required": True},
+                ],
+                "measures": [
+                    {"name": "paid_amount", "operation": "sum", "source_column": "amount"},
+                ],
+            },
+            "recipe": {
+                "name": "Stripe Revenue",
+                "source_schema": "charges",
+                "conditions": [
+                    {"condition_id": "is_paid", "column": "status", "operator": "equals", "value": "paid"},
+                ],
+                "rules": [
+                    {
+                        "rule_name": "paid_revenue",
+                        "source_measure": "paid_amount",
+                        "priority": 1,
+                        "when": "is_paid",
+                        "debit": {"slot_id": "dr", "role": "primary", "account_code": "1200", "account_name": "AR", "account_type": "asset", "normal_balance": "debit"},
+                        "credit": {"slot_id": "cr", "role": "offset", "account_code": "4000", "account_name": "Revenue", "account_type": "revenue", "normal_balance": "credit"},
+                    },
+                ],
+            },
+        }
+        pattern = build_pipeline_from_spec(spec)
+        cond_nodes = [n for n in pattern.nodes if NodeLabel.CONDITION in n.labels]
+        assert len(cond_nodes) == 1
+        when_rels = [r for r in pattern.relationships if r.type == RelationshipType.WHEN]
+        assert len(when_rels) == 1
+        assert validate_recipe(pattern).is_valid
+
+    def test_schema_conditions_migrated(self):
+        """schema.conditions[] backward compat shim: migrates to recipe subgraph."""
+        spec = {
+            "recipe_id": "compat_pipeline",
+            "schema": {
+                "name": "charges",
+                "source_system": "stripe",
+                "columns": [
+                    {"name": "amount", "position": 1, "data_type": "decimal", "role": "amount", "required": True},
+                    {"name": "status", "position": 2, "data_type": "string", "role": "category", "required": True},
+                ],
+                "measures": [
+                    {"name": "total", "operation": "sum", "source_column": "amount"},
+                ],
+                "conditions": [
+                    {"condition_id": "is_paid", "column": "status", "operator": "equals", "value": "paid"},
+                ],
+            },
+            "recipe": {
+                "name": "Stripe Revenue",
+                "source_schema": "charges",
+                "rules": [
+                    {
+                        "rule_name": "paid_revenue",
+                        "source_measure": "total",
+                        "priority": 1,
+                        "when": "is_paid",
+                        "debit": {"slot_id": "dr", "role": "primary", "account_code": "1200", "account_name": "AR", "account_type": "asset", "normal_balance": "debit"},
+                        "credit": {"slot_id": "cr", "role": "offset", "account_code": "4000", "account_name": "Revenue", "account_type": "revenue", "normal_balance": "credit"},
+                    },
+                ],
+            },
+        }
+        pattern = build_pipeline_from_spec(spec)
+        cond_nodes = [n for n in pattern.nodes if NodeLabel.CONDITION in n.labels]
+        assert len(cond_nodes) == 1
+        when_rels = [r for r in pattern.relationships if r.type == RelationshipType.WHEN]
+        assert len(when_rels) == 1
+
+    def test_no_conditions_backward_compat(self):
+        """Pipeline without conditions is identical to pre-condition behavior."""
+        spec = {
+            "recipe_id": "no_cond",
+            "schema": {
+                "name": "test",
+                "source_system": "csv",
+                "columns": [
+                    {"name": "amount", "position": 1, "data_type": "decimal", "role": "amount", "required": True},
+                ],
+                "measures": [
+                    {"name": "total", "operation": "sum", "source_column": "amount"},
+                ],
+            },
+            "recipe": {
+                "name": "Simple Recipe",
+                "source_schema": "test",
+                "rules": [
+                    {
+                        "rule_name": "entry",
+                        "source_measure": "total",
+                        "priority": 1,
+                        "debit": {"slot_id": "dr", "role": "primary", "account_code": "5000", "account_name": "Expense", "account_type": "expense", "normal_balance": "debit"},
+                        "credit": {"slot_id": "cr", "role": "offset", "account_code": "2000", "account_name": "AP", "account_type": "liability", "normal_balance": "credit"},
+                    },
+                ],
+            },
+        }
+        pattern = build_pipeline_from_spec(spec)
+        cond_nodes = [n for n in pattern.nodes if NodeLabel.CONDITION in n.labels]
+        assert len(cond_nodes) == 0
+        when_rels = [r for r in pattern.relationships if r.type == RelationshipType.WHEN]
+        assert len(when_rels) == 0
+        assert validate_recipe(pattern).is_valid

@@ -87,7 +87,7 @@ class TestRecipeScopedKeys:
         assert MERGE_KEYS[NodeLabel.ACCOUNTING_RECIPE] == ("recipe_id",)
 
     def test_output_format_key(self):
-        assert MERGE_KEYS[NodeLabel.OUTPUT_FORMAT] == ("recipe_id", "name")
+        assert MERGE_KEYS[NodeLabel.OUTPUT_FORMAT] == ("format_id",)
 
     def test_output_column_key(self):
         assert MERGE_KEYS[NodeLabel.OUTPUT_COLUMN] == ("format_id", "name")
@@ -95,8 +95,8 @@ class TestRecipeScopedKeys:
     def test_validation_rule_key(self):
         assert MERGE_KEYS[NodeLabel.VALIDATION_RULE] == ("format_id", "name")
 
-    def test_batch_format_key(self):
-        assert MERGE_KEYS[NodeLabel.BATCH_FORMAT] == ("recipe_id",)
+    def test_entry_structure_key(self):
+        assert MERGE_KEYS[NodeLabel.ENTRY_STRUCTURE] == ("format_id",)
 
 
 class TestValidateMergeKeysDetectsErrors:

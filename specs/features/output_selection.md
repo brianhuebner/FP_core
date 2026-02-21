@@ -10,7 +10,7 @@
 
 A recipe defines *accounting logic* — how source data becomes journal entries. An output format defines *presentation* — how those entries are delivered. Today these are welded together: `format_id = recipe_id`, one format per recipe, baked into the pipeline spec. A user processing the same payroll recipe should be able to say "show me a general journal" for review, then "give me the QuickBooks import file" for production — without rebuilding the recipe. Future output types (payment files, invoices, AP vouchers) should be addable without touching recipe logic.
 
-This spec decouples output formats from recipes, enables multiple formats per recipe, and gives agents a way to select which format to use at processing time.
+This spec decouples output formats from recipes, enables multiple formats per recipe, and gives agents a way to select which format to use at processing time.  
 
 ---
 

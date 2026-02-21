@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from domain.types import GraphPattern, Node, NodeLabel, RelationshipType
 from domain.ontology import ValidationResult
 from domain.logic import (
+    extract_conditions_for_rule,
     extract_entry_structure,
     extract_debit_credit_slots,
     extract_measures_for_schema,
@@ -106,19 +107,23 @@ def summarize_recipe_load(pattern: GraphPattern, recipe_id: str) -> Dict[str, An
         )
         rule_nodes.sort(key=lambda n: _prop(n, "priority", 0))
         result["recipe_name"] = _prop(recipe_node, "name")
+        rules_summary = []
+        for r in rule_nodes:
+            rule_summary: Dict[str, Any] = {
+                "rule_name": _prop(r, "rule_name"),
+                "source_measure": _prop(r, "source_measure"),
+                "priority": _prop(r, "priority"),
+                "memo_template": _prop(r, "memo_template"),
+            }
+            conditions = extract_conditions_for_rule(pattern, r.id)
+            if conditions:
+                rule_summary["has_condition"] = True
+            rules_summary.append(rule_summary)
         result["recipe"] = {
             "name": _prop(recipe_node, "name"),
             "journal_no_format": _prop(recipe_node, "journal_no_format"),
             "batch_key": _prop(recipe_node, "batch_key"),
-            "rules": [
-                {
-                    "rule_name": _prop(r, "rule_name"),
-                    "source_measure": _prop(r, "source_measure"),
-                    "priority": _prop(r, "priority"),
-                    "memo_template": _prop(r, "memo_template"),
-                }
-                for r in rule_nodes
-            ],
+            "rules": rules_summary,
         }
 
     return result
@@ -194,14 +199,31 @@ def summarize_processing_instructions(
                         })
                 return accounts
 
-            rules_list.append({
+            rule_entry: Dict[str, Any] = {
                 "priority": _prop(rule, "priority"),
                 "name": _prop(rule, "rule_name"),
                 "source_measure": _prop(rule, "source_measure"),
                 "memo_template": _prop(rule, "memo_template"),
                 "debits": _slot_accounts(debit_slots),
                 "credits": _slot_accounts(credit_slots),
-            })
+            }
+
+            conditions = extract_conditions_for_rule(pattern, rule.id)
+            if conditions:
+                cond_list = []
+                for cond in conditions:
+                    entry: Dict[str, Any] = {
+                        "condition_id": _prop(cond, "condition_id"),
+                        "column": _prop(cond, "column"),
+                        "operator": _prop(cond, "operator"),
+                    }
+                    v = _prop(cond, "value")
+                    if v is not None:
+                        entry["value"] = v
+                    cond_list.append(entry)
+                rule_entry["conditions"] = cond_list
+
+            rules_list.append(rule_entry)
         result["rules"] = rules_list
 
     # Output format — from separately loaded format pattern

@@ -129,7 +129,7 @@ class AccountingRecipe:
 
 @dataclass(frozen=True)
 class OutputFormat:
-    recipe_id: str
+    format_id: str
     name: str
     target_system: str
     file_format: str
@@ -160,8 +160,8 @@ class ValidationRule:
 
 
 @dataclass(frozen=True)
-class BatchFormat:
-    recipe_id: str
+class EntryStructure:
+    format_id: str
     entry_separator: str
     grouping_column: str
     date_column: str

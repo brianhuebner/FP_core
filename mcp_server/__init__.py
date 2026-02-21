@@ -27,6 +27,9 @@ mcp = FastMCP("FP_core")
 # Server-side state: loaded recipe graphs keyed by recipe_id
 _loaded_recipes: Dict[str, GraphPattern] = {}
 
+# Server-side state: loaded format graphs keyed by format_id
+_loaded_formats: Dict[str, GraphPattern] = {}
+
 # Lazy Neo4j connection singleton
 _connection: Optional[object] = None
 
@@ -34,6 +37,11 @@ _connection: Optional[object] = None
 def get_loaded_recipes() -> Dict[str, GraphPattern]:
     """Access the server-side recipe cache."""
     return _loaded_recipes
+
+
+def get_loaded_formats() -> Dict[str, GraphPattern]:
+    """Access the server-side format cache."""
+    return _loaded_formats
 
 
 def get_connection():

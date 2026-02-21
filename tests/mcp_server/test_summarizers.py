@@ -546,6 +546,50 @@ class TestSummarizeRecipeLoad:
         assert "schema" not in result
         assert "recipe" not in result
 
+    def test_has_condition_flag(self):
+        """Rule with WHEN relationship shows has_condition: True in recipe load summary."""
+        schema = Node(
+            id="schema_test", labels={NodeLabel.SOURCE_SCHEMA},
+            properties={"recipe_id": RECIPE_ID, "name": "charges", "source_system": "stripe"},
+        )
+        recipe = Node(
+            id="recipe_test", labels={NodeLabel.ACCOUNTING_RECIPE},
+            properties={"recipe_id": RECIPE_ID, "name": "Test Recipe", "source_schema": "charges"},
+        )
+        rule = Node(
+            id="rule_paid", labels={NodeLabel.MAPPING_RULE},
+            properties={
+                "recipe_id": RECIPE_ID, "rule_name": "paid_entry",
+                "source_measure": "total_amount", "priority": 1,
+            },
+        )
+        cond = Node(
+            id="cond_is_paid", labels={NodeLabel.CONDITION},
+            properties={
+                "recipe_id": RECIPE_ID, "condition_id": "is_paid",
+                "column": "status", "operator": "equals", "value": "paid",
+            },
+        )
+        rels = [
+            Relationship(id="r_transforms", type=RelationshipType.TRANSFORMS,
+                         start_node_id="recipe_test", end_node_id="schema_test", properties={}),
+            Relationship(id="r_has_rule", type=RelationshipType.HAS_RULE,
+                         start_node_id="recipe_test", end_node_id="rule_paid", properties={}),
+            Relationship(id="r_when", type=RelationshipType.WHEN,
+                         start_node_id="rule_paid", end_node_id="cond_is_paid", properties={}),
+        ]
+        pattern = GraphPattern(nodes=[schema, recipe, rule, cond], relationships=rels)
+        result = summarize_recipe_load(pattern, RECIPE_ID)
+        rules = result["recipe"]["rules"]
+        assert len(rules) == 1
+        assert rules[0]["has_condition"] is True
+
+    def test_no_condition_flag_without_when(self, pipeline):
+        """Rules without WHEN edges do not have has_condition key."""
+        result = summarize_recipe_load(pipeline, RECIPE_ID)
+        for rule in result["recipe"]["rules"]:
+            assert "has_condition" not in rule
+
 
 # ============================================================================
 # TestSummarizeProcessingInstructions
@@ -683,6 +727,106 @@ class TestSummarizeProcessingInstructions:
         output = result["output_format"]
         assert "entry_structure" not in output
         assert len(output["columns"]) == 1
+
+    def _pipeline_with_condition(self, operator="equals", value="paid"):
+        """Build a minimal pipeline containing one rule wired to one Condition via WHEN."""
+        schema = Node(
+            id="schema_test", labels={NodeLabel.SOURCE_SCHEMA},
+            properties={"recipe_id": RECIPE_ID, "name": "charges", "source_system": "stripe"},
+        )
+        measure = Node(
+            id="msr_total", labels={NodeLabel.MEASURE},
+            properties={"recipe_id": RECIPE_ID, "name": "total_amount", "operation": "sum"},
+        )
+        recipe = Node(
+            id="recipe_test", labels={NodeLabel.ACCOUNTING_RECIPE},
+            properties={"recipe_id": RECIPE_ID, "name": "Test Recipe", "source_schema": "charges"},
+        )
+        rule = Node(
+            id="rule_paid", labels={NodeLabel.MAPPING_RULE},
+            properties={
+                "recipe_id": RECIPE_ID, "rule_name": "paid_entry",
+                "source_measure": "total_amount", "priority": 1,
+            },
+        )
+        cond_props = {
+            "recipe_id": RECIPE_ID, "condition_id": "is_paid",
+            "column": "status", "operator": operator,
+        }
+        if value is not None:
+            cond_props["value"] = value
+        cond = Node(id="cond_is_paid", labels={NodeLabel.CONDITION}, properties=cond_props)
+
+        slot_dr = Node(id="slot_dr", labels={NodeLabel.ACCOUNT_SLOT}, properties={
+            "recipe_id": RECIPE_ID, "slot_id": "dr", "role": "primary", "entry_type": "debit",
+        })
+        slot_cr = Node(id="slot_cr", labels={NodeLabel.ACCOUNT_SLOT}, properties={
+            "recipe_id": RECIPE_ID, "slot_id": "cr", "role": "offset", "entry_type": "credit",
+        })
+        acct_dr = Node(id="acct_1200", labels={NodeLabel.ACCOUNT}, properties={
+            "code": "1200", "name": "AR", "account_type": "asset", "normal_balance": "debit", "is_active": True,
+        })
+        acct_cr = Node(id="acct_4000", labels={NodeLabel.ACCOUNT}, properties={
+            "code": "4000", "name": "Revenue", "account_type": "revenue", "normal_balance": "credit", "is_active": True,
+        })
+
+        rels = [
+            Relationship(id="r_transforms", type=RelationshipType.TRANSFORMS,
+                         start_node_id="recipe_test", end_node_id="schema_test", properties={}),
+            Relationship(id="r_has_msr", type=RelationshipType.HAS_MEASURE,
+                         start_node_id="schema_test", end_node_id="msr_total", properties={}),
+            Relationship(id="r_has_rule", type=RelationshipType.HAS_RULE,
+                         start_node_id="recipe_test", end_node_id="rule_paid", properties={}),
+            Relationship(id="r_when", type=RelationshipType.WHEN,
+                         start_node_id="rule_paid", end_node_id="cond_is_paid", properties={}),
+            Relationship(id="r_dr", type=RelationshipType.DEBITS,
+                         start_node_id="rule_paid", end_node_id="slot_dr", properties={}),
+            Relationship(id="r_cr", type=RelationshipType.CREDITS,
+                         start_node_id="rule_paid", end_node_id="slot_cr", properties={}),
+            Relationship(id="r_map_dr", type=RelationshipType.MAPPED_TO,
+                         start_node_id="slot_dr", end_node_id="acct_1200", properties={}),
+            Relationship(id="r_map_cr", type=RelationshipType.MAPPED_TO,
+                         start_node_id="slot_cr", end_node_id="acct_4000", properties={}),
+        ]
+        nodes = [schema, measure, recipe, rule, cond, slot_dr, slot_cr, acct_dr, acct_cr]
+        return GraphPattern(nodes=nodes, relationships=rels)
+
+    def test_when_condition_emitted(self):
+        """Rule with WHEN has a 'conditions' key in processing instructions output."""
+        pattern = self._pipeline_with_condition()
+        result = summarize_processing_instructions(pattern, RECIPE_ID)
+        rules = result["rules"]
+        assert len(rules) == 1
+        assert "conditions" in rules[0]
+
+    def test_condition_fields_complete(self):
+        """Condition entry has condition_id, column, and operator."""
+        pattern = self._pipeline_with_condition()
+        result = summarize_processing_instructions(pattern, RECIPE_ID)
+        cond = result["rules"][0]["conditions"][0]
+        assert cond["condition_id"] == "is_paid"
+        assert cond["column"] == "status"
+        assert cond["operator"] == "equals"
+
+    def test_condition_value_present(self):
+        """Equals condition includes 'value' in output."""
+        pattern = self._pipeline_with_condition(operator="equals", value="paid")
+        result = summarize_processing_instructions(pattern, RECIPE_ID)
+        cond = result["rules"][0]["conditions"][0]
+        assert cond["value"] == "paid"
+
+    def test_condition_without_value(self):
+        """is_null condition omits 'value' from output."""
+        pattern = self._pipeline_with_condition(operator="is_null", value=None)
+        result = summarize_processing_instructions(pattern, RECIPE_ID)
+        cond = result["rules"][0]["conditions"][0]
+        assert "value" not in cond
+
+    def test_no_condition_backward_compat(self, pipeline):
+        """Rules without WHEN edges have no 'conditions' key in output."""
+        result = summarize_processing_instructions(pipeline, RECIPE_ID)
+        for rule in result["rules"]:
+            assert "conditions" not in rule
 
 
 # ============================================================================

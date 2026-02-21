@@ -104,7 +104,7 @@ class TestRecipeFrozenDataclasses:
 
     def test_output_format_is_frozen(self):
         of = OutputFormat(
-            recipe_id="r1", name="QBO Import",
+            format_id="f1", name="QBO Import",
             target_system="quickbooks", file_format="iif",
         )
         with pytest.raises(AttributeError):
@@ -188,7 +188,7 @@ class TestRecipeDefaults:
 
     def test_output_format_defaults(self):
         of = OutputFormat(
-            recipe_id="r1", name="Export",
+            format_id="f1", name="Export",
             target_system="csv", file_format="csv",
         )
         assert of.version is None

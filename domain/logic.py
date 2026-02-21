@@ -12,7 +12,7 @@ from domain.types import (
 )
 from domain.ontology import ValidationResult
 from domain.ontology_recipe import (
-    validate_batch_format_references_column,
+    validate_entry_structure_references_column,
     validate_mapping_rule_completeness,
     validate_measure_references_column,
     validate_output_column_positions_unique,
@@ -27,17 +27,16 @@ def build_source_schema_pattern(
     schema_node: Node,
     column_nodes: List[Node],
     measure_nodes: List[Node],
-    condition_nodes: List[Node],
     column_rels: List[Relationship],
     measure_rels: List[Relationship],
     aggregates_rels: List[Relationship] | None = None,
 ) -> GraphPattern:
     """Construct a GraphPattern for a complete source schema subgraph.
 
-    Includes: schema + columns + measures + conditions and all connecting
+    Includes: schema + columns + measures and all connecting
     relationships (HAS_COLUMN, HAS_MEASURE, AGGREGATES).
     """
-    nodes = [schema_node] + column_nodes + measure_nodes + condition_nodes
+    nodes = [schema_node] + column_nodes + measure_nodes
     relationships = list(column_rels) + list(measure_rels)
     if aggregates_rels:
         relationships.extend(aggregates_rels)
@@ -82,6 +81,7 @@ def validate_recipe(pattern: GraphPattern) -> ValidationResult:
         validate_measure_references_column(pattern),
         validate_slot_has_mapping(pattern),
         validate_uses_reference(pattern),
+        validate_when_targets(pattern),
     )
 
 
@@ -143,19 +143,35 @@ def extract_debit_credit_slots(
     return (debit_slots, credit_slots)
 
 
+def extract_conditions_for_rule(
+    pattern: GraphPattern,
+    rule_node_id: str,
+) -> Tuple[Node, ...]:
+    """Extract Condition nodes connected to a MappingRule via WHEN."""
+    condition_ids = {
+        rel.end_node_id
+        for rel in pattern.relationships
+        if rel.type == RelationshipType.WHEN and rel.start_node_id == rule_node_id
+    }
+    return tuple(
+        n for n in pattern.nodes
+        if n.id in condition_ids and NodeLabel.CONDITION in n.labels
+    )
+
+
 def build_output_format_pattern(
     format_node: Node,
     column_nodes: List[Node],
     column_rels: List[Relationship],
     validation_nodes: List[Node] | None = None,
     validation_rels: List[Relationship] | None = None,
-    batch_node: Node | None = None,
-    batch_rel: Relationship | None = None,
+    entry_structure_node: Node | None = None,
+    entry_structure_rel: Relationship | None = None,
 ) -> GraphPattern:
     """Construct a GraphPattern for a complete output format subgraph.
 
     Includes: format + output columns + optional validation rules + optional
-    batch format and all connecting relationships.
+    entry structure and all connecting relationships.
     """
     nodes: List[Node] = [format_node] + column_nodes
     relationships = list(column_rels)
@@ -163,10 +179,10 @@ def build_output_format_pattern(
         nodes.extend(validation_nodes)
     if validation_rels:
         relationships.extend(validation_rels)
-    if batch_node is not None:
-        nodes.append(batch_node)
-    if batch_rel is not None:
-        relationships.append(batch_rel)
+    if entry_structure_node is not None:
+        nodes.append(entry_structure_node)
+    if entry_structure_rel is not None:
+        relationships.append(entry_structure_rel)
     return GraphPattern(nodes=nodes, relationships=relationships)
 
 
@@ -208,24 +224,24 @@ def extract_validation_rules(
     )
 
 
-def extract_batch_format(
+def extract_entry_structure(
     pattern: GraphPattern,
     format_node_id: str,
 ) -> Node | None:
-    """Extract the BatchFormat node connected to an OutputFormat via HAS_BATCH_FORMAT.
+    """Extract the EntryStructure node connected to an OutputFormat via HAS_ENTRY_STRUCTURE.
 
     Returns a single node or None (one-to-one relationship).
     """
-    batch_ids = {
+    entry_ids = {
         rel.end_node_id
         for rel in pattern.relationships
         if (
-            rel.type == RelationshipType.HAS_BATCH_FORMAT
+            rel.type == RelationshipType.HAS_ENTRY_STRUCTURE
             and rel.start_node_id == format_node_id
         )
     }
     for n in pattern.nodes:
-        if n.id in batch_ids and NodeLabel.BATCH_FORMAT in n.labels:
+        if n.id in entry_ids and NodeLabel.ENTRY_STRUCTURE in n.labels:
             return n
     return None
 
@@ -235,7 +251,7 @@ def validate_output_format(pattern: GraphPattern) -> ValidationResult:
     return ValidationResult.merge(
         validate_output_format_has_columns(pattern),
         validate_output_column_positions_unique(pattern),
-        validate_batch_format_references_column(pattern),
+        validate_entry_structure_references_column(pattern),
     )
 
 
@@ -272,6 +288,22 @@ def validate_pipeline_connectivity(pattern: GraphPattern) -> ValidationResult:
                     f"'{rel.start_node_id}' not found in pattern"
                 )
 
+    if errors:
+        return ValidationResult.failure(tuple(errors))
+    return ValidationResult.success()
+
+
+def validate_when_targets(pattern: GraphPattern) -> ValidationResult:
+    """Verify every WHEN relationship's target node exists in the pattern."""
+    node_ids = {n.id for n in pattern.nodes}
+    errors: list[str] = []
+    for rel in pattern.relationships:
+        if rel.type == RelationshipType.WHEN:
+            if rel.end_node_id not in node_ids:
+                errors.append(
+                    f"WHEN target '{rel.end_node_id}' from rule "
+                    f"'{rel.start_node_id}' not found in pattern"
+                )
     if errors:
         return ValidationResult.failure(tuple(errors))
     return ValidationResult.success()

@@ -65,8 +65,8 @@ RECIPE_RELATIONSHIP_CONSTRAINTS: Dict[
     RelationshipType.HAS_VALIDATION: (
         (NodeLabel.OUTPUT_FORMAT, NodeLabel.VALIDATION_RULE),
     ),
-    RelationshipType.HAS_BATCH_FORMAT: (
-        (NodeLabel.OUTPUT_FORMAT, NodeLabel.BATCH_FORMAT),
+    RelationshipType.HAS_ENTRY_STRUCTURE: (
+        (NodeLabel.OUTPUT_FORMAT, NodeLabel.ENTRY_STRUCTURE),
     ),
     RelationshipType.USES_REFERENCE: (
         (NodeLabel.MAPPING_RULE, NodeLabel.REFERENCE),
@@ -180,10 +180,10 @@ _ACCOUNTING_RECIPE_PROPS = PropertySchema(
 )
 
 _OUTPUT_FORMAT_PROPS = PropertySchema(
-    required=frozenset({"recipe_id", "name", "target_system", "file_format"}),
+    required=frozenset({"format_id", "name", "target_system", "file_format"}),
     optional=frozenset({"version"}),
     types={
-        "recipe_id": str,
+        "format_id": str,
         "name": str,
         "target_system": str,
         "file_format": str,
@@ -203,11 +203,11 @@ _VALIDATION_RULE_PROPS = PropertySchema(
     },
 )
 
-_BATCH_FORMAT_PROPS = PropertySchema(
-    required=frozenset({"recipe_id", "entry_separator", "grouping_column", "date_column"}),
+_ENTRY_STRUCTURE_PROPS = PropertySchema(
+    required=frozenset({"format_id", "entry_separator", "grouping_column", "date_column"}),
     optional=frozenset({"validation", "description"}),
     types={
-        "recipe_id": str,
+        "format_id": str,
         "entry_separator": str,
         "grouping_column": str,
         "date_column": str,
@@ -304,7 +304,7 @@ _RECIPE_PROPS_MAP: Dict[NodeLabel, PropertySchema] = {
     NodeLabel.OUTPUT_FORMAT: _OUTPUT_FORMAT_PROPS,
     NodeLabel.OUTPUT_COLUMN: _OUTPUT_COLUMN_PROPS,
     NodeLabel.VALIDATION_RULE: _VALIDATION_RULE_PROPS,
-    NodeLabel.BATCH_FORMAT: _BATCH_FORMAT_PROPS,
+    NodeLabel.ENTRY_STRUCTURE: _ENTRY_STRUCTURE_PROPS,
     NodeLabel.REFERENCE: _REFERENCE_PROPS,
 }
 
@@ -596,29 +596,29 @@ def validate_output_column_positions_unique(pattern: GraphPattern) -> Validation
     return ValidationResult.success()
 
 
-def validate_batch_format_references_column(pattern: GraphPattern) -> ValidationResult:
-    """BatchFormat's grouping_column/date_column should match a connected OutputColumn name (soft warning)."""
-    batch_ids = {
+def validate_entry_structure_references_column(pattern: GraphPattern) -> ValidationResult:
+    """EntryStructure's grouping_column/date_column should match a connected OutputColumn name (soft warning)."""
+    entry_ids = {
         n.id for n in pattern.nodes
-        if NodeLabel.BATCH_FORMAT in n.labels
+        if NodeLabel.ENTRY_STRUCTURE in n.labels
     }
-    if not batch_ids:
+    if not entry_ids:
         return ValidationResult.success()
 
     node_map = {n.id: n for n in pattern.nodes}
 
-    # Find which OutputFormat each BatchFormat is connected to
-    format_to_batch: dict[str, str] = {}
+    # Find which OutputFormat each EntryStructure is connected to
+    format_to_entry: dict[str, str] = {}
     for rel in pattern.relationships:
-        if rel.type == RelationshipType.HAS_BATCH_FORMAT:
-            format_to_batch[rel.end_node_id] = rel.start_node_id
+        if rel.type == RelationshipType.HAS_ENTRY_STRUCTURE:
+            format_to_entry[rel.end_node_id] = rel.start_node_id
 
     warnings: list[str] = []
-    for bid in sorted(batch_ids):
-        batch_node = node_map.get(bid)
-        if not batch_node:
+    for eid in sorted(entry_ids):
+        entry_node = node_map.get(eid)
+        if not entry_node:
             continue
-        format_id = format_to_batch.get(bid)
+        format_id = format_to_entry.get(eid)
         if not format_id:
             continue
 
@@ -635,16 +635,16 @@ def validate_batch_format_references_column(pattern: GraphPattern) -> Validation
                     if name is not None:
                         column_names.add(name)
 
-        grouping = batch_node.properties.get("grouping_column")
+        grouping = entry_node.properties.get("grouping_column")
         if grouping and grouping not in column_names:
             warnings.append(
-                f"BatchFormat '{bid}' grouping_column '{grouping}' "
+                f"EntryStructure '{eid}' grouping_column '{grouping}' "
                 f"does not match any OutputColumn name"
             )
-        date_col = batch_node.properties.get("date_column")
+        date_col = entry_node.properties.get("date_column")
         if date_col and date_col not in column_names:
             warnings.append(
-                f"BatchFormat '{bid}' date_column '{date_col}' "
+                f"EntryStructure '{eid}' date_column '{date_col}' "
                 f"does not match any OutputColumn name"
             )
 

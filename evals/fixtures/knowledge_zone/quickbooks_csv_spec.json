@@ -1,0 +1,53 @@
+{
+  "target_system": "quickbooks",
+  "file_format": "csv",
+  "description": "QuickBooks Desktop journal entry import format",
+  "columns": [
+    {
+      "name": "journal_number",
+      "data_type": "string",
+      "required": true,
+      "description": "Unique journal entry identifier (e.g. PY-202601-0001)"
+    },
+    {
+      "name": "journal_date",
+      "data_type": "date",
+      "required": true,
+      "description": "Transaction date in YYYY-MM-DD format"
+    },
+    {
+      "name": "account_code",
+      "data_type": "string",
+      "required": true,
+      "description": "Chart of accounts code for the line"
+    },
+    {
+      "name": "debit_amount",
+      "data_type": "decimal",
+      "required": true,
+      "description": "Debit amount (positive value, 0.00 if credit line)"
+    },
+    {
+      "name": "credit_amount",
+      "data_type": "decimal",
+      "required": true,
+      "description": "Credit amount (positive value, 0.00 if debit line)"
+    },
+    {
+      "name": "memo",
+      "data_type": "string",
+      "required": false,
+      "description": "Line-level memo or description"
+    }
+  ],
+  "entry_structure": {
+    "grouping_column": "journal_number",
+    "entry_separator": "blank_row",
+    "date_column": "journal_date",
+    "description": "Lines with the same journal_number form one journal entry"
+  },
+  "validation": {
+    "rule": "SUM(debit_amount) == SUM(credit_amount) per journal_number",
+    "description": "Each journal entry must balance (double-entry)"
+  }
+}
