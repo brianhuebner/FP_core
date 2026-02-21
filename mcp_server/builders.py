@@ -1,6 +1,7 @@
 # mcp_server/builders.py — Pure functions: JSON pipeline spec → domain objects
 from __future__ import annotations
 
+import json
 from typing import Any, Dict, List, Optional, Tuple
 
 from domain.types import (
@@ -92,10 +93,10 @@ def _build_schema_nodes(
         if msr_spec.get("description"):
             msr_props["description"] = msr_spec["description"]
 
-        # Aggregation properties: group_by (array → comma-separated), split_by, split_column
+        # Aggregation properties: group_by (array → JSON string), split_by, split_column
         group_by = msr_spec.get("group_by")
         if group_by:
-            msr_props["group_by"] = ",".join(group_by)
+            msr_props["group_by"] = json.dumps(group_by)
         if msr_spec.get("split_by"):
             msr_props["split_by"] = msr_spec["split_by"]
         if msr_spec.get("split_column"):
@@ -197,7 +198,9 @@ def _build_recipe_nodes(
         )
 
     for rule_spec in recipe_spec.get("rules", []):
-        # BUG-001: normalize plural/singular key variants and unwrap single-item lists
+        # BUG-001: normalize plural/singular key variants and unwrap single-item lists.
+        # Workaround for agents that send "debits":[{...}] instead of "debit":{...}.
+        # TODO(sunset): remove once all callers conform to the singular-dict spec.
         rule_spec = dict(rule_spec)
         for singular, plural in [("debit", "debits"), ("credit", "credits")]:
             if plural in rule_spec and singular not in rule_spec:

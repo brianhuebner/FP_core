@@ -30,18 +30,24 @@ from domain.ontology_recipe import (
 # Constraint map completeness
 # ============================================================================
 
+_EXPECTED_RECIPE_ONTOLOGY_COUNT = 12
+_EXPECTED_RECIPE_CONSTRAINTS_COUNT = 14
+_EXPECTED_MERGED_ONTOLOGY_COUNT = 19
+_EXPECTED_MERGED_CONSTRAINTS_COUNT = 25
+
+
 class TestRecipeConstraintMaps:
-    def test_recipe_ontology_has_12_entries(self):
-        assert len(RECIPE_ONTOLOGY) == 12
+    def test_recipe_ontology_count(self):
+        assert len(RECIPE_ONTOLOGY) == _EXPECTED_RECIPE_ONTOLOGY_COUNT
 
-    def test_recipe_relationship_constraints_has_14_entries(self):
-        assert len(RECIPE_RELATIONSHIP_CONSTRAINTS) == 14
+    def test_recipe_relationship_constraints_count(self):
+        assert len(RECIPE_RELATIONSHIP_CONSTRAINTS) == _EXPECTED_RECIPE_CONSTRAINTS_COUNT
 
-    def test_merged_ontology_has_19_entries(self):
-        assert len(merged_ontology()) == 19
+    def test_merged_ontology_count(self):
+        assert len(merged_ontology()) == _EXPECTED_MERGED_ONTOLOGY_COUNT
 
-    def test_merged_relationship_constraints_has_25_entries(self):
-        assert len(merged_relationship_constraints()) == 25
+    def test_merged_relationship_constraints_count(self):
+        assert len(merged_relationship_constraints()) == _EXPECTED_MERGED_CONSTRAINTS_COUNT
 
     def test_recipe_ontology_labels(self):
         expected = {

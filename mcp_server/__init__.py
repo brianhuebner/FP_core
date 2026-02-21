@@ -4,12 +4,15 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from typing import Dict, Optional
+from typing import TYPE_CHECKING, Dict, Optional
 
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 
 from domain.types import GraphPattern
+
+if TYPE_CHECKING:
+    from persistence.connection import Neo4jConnection
 
 load_dotenv()
 
@@ -31,7 +34,7 @@ _loaded_recipes: Dict[str, GraphPattern] = {}
 _loaded_formats: Dict[str, GraphPattern] = {}
 
 # Lazy Neo4j connection singleton
-_connection: Optional[object] = None
+_connection: Optional[Neo4jConnection] = None
 
 
 def get_loaded_recipes() -> Dict[str, GraphPattern]:

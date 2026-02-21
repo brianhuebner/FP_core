@@ -210,7 +210,7 @@ class TestBuildSchemaNodes:
             "measures": [{"name": "total", "operation": "sum", "group_by": ["pay_date"]}],
         }
         _, _, measures, _ = _build_schema_nodes(spec, "test_id")
-        assert measures[0].properties["group_by"] == "pay_date"
+        assert measures[0].properties["group_by"] == '["pay_date"]'
 
     def test_measure_group_by_multiple_columns(self):
         spec = {
@@ -218,7 +218,7 @@ class TestBuildSchemaNodes:
             "measures": [{"name": "total", "operation": "sum", "group_by": ["pay_date", "location"]}],
         }
         _, _, measures, _ = _build_schema_nodes(spec, "test_id")
-        assert measures[0].properties["group_by"] == "pay_date,location"
+        assert measures[0].properties["group_by"] == '["pay_date", "location"]'
 
     def test_measure_group_by_empty_array(self):
         spec = {
@@ -256,7 +256,7 @@ class TestBuildSchemaNodes:
         }
         _, _, measures, _ = _build_schema_nodes(spec, "test_id")
         m = measures[0]
-        assert m.properties["group_by"] == "pay_date,location"
+        assert m.properties["group_by"] == '["pay_date", "location"]'
         assert m.properties["split_by"] == "department"
         assert m.properties["split_column"] == "dept_code"
 

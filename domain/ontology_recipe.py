@@ -1,13 +1,10 @@
 # domain/ontology_recipe.py — Recipe Ontology Schema, Constraints & Validators
-from __future__ import annotations
-
-from typing import Dict, FrozenSet, List, Tuple
+from typing import Dict, FrozenSet, Tuple
 
 from domain.types import (
     GraphPattern,
     Node,
     NodeLabel,
-    Relationship,
     RelationshipType,
 )
 from domain.ontology import (
@@ -17,6 +14,7 @@ from domain.ontology import (
     PropertySchema,
     RelationshipConstraint,
     ValidationResult,
+    _gather_constraints,
 )
 
 
@@ -251,46 +249,18 @@ def _outgoing_recipe(
     label: NodeLabel,
     constraints: Dict[RelationshipType, Tuple[Tuple[NodeLabel, NodeLabel], ...]] | None = None,
 ) -> Tuple[RelationshipConstraint, ...]:
-    """Gather all RelationshipConstraints where label is a valid source."""
     if constraints is None:
         constraints = RECIPE_RELATIONSHIP_CONSTRAINTS
-    result: list[RelationshipConstraint] = []
-    for rel_type, pairs in constraints.items():
-        source_labels = frozenset(s for s, t in pairs if s == label)
-        if source_labels:
-            target_labels = frozenset(t for s, t in pairs if s == label)
-            result.append(RelationshipConstraint(
-                relationship_type=rel_type,
-                source_labels=frozenset({label}),
-                target_labels=target_labels,
-                properties=PropertySchema(
-                    required=frozenset(), optional=frozenset(), types={},
-                ),
-            ))
-    return tuple(result)
+    return _gather_constraints(label, constraints, "source")
 
 
 def _incoming_recipe(
     label: NodeLabel,
     constraints: Dict[RelationshipType, Tuple[Tuple[NodeLabel, NodeLabel], ...]] | None = None,
 ) -> Tuple[RelationshipConstraint, ...]:
-    """Gather all RelationshipConstraints where label is a valid target."""
     if constraints is None:
         constraints = RECIPE_RELATIONSHIP_CONSTRAINTS
-    result: list[RelationshipConstraint] = []
-    for rel_type, pairs in constraints.items():
-        target_labels = frozenset(t for s, t in pairs if t == label)
-        if target_labels:
-            source_labels = frozenset(s for s, t in pairs if t == label)
-            result.append(RelationshipConstraint(
-                relationship_type=rel_type,
-                source_labels=source_labels,
-                target_labels=frozenset({label}),
-                properties=PropertySchema(
-                    required=frozenset(), optional=frozenset(), types={},
-                ),
-            ))
-    return tuple(result)
+    return _gather_constraints(label, constraints, "target")
 
 
 _RECIPE_PROPS_MAP: Dict[NodeLabel, PropertySchema] = {
@@ -351,40 +321,14 @@ def _outgoing_merged(
     label: NodeLabel,
     constraints: Dict[RelationshipType, Tuple[Tuple[NodeLabel, NodeLabel], ...]],
 ) -> Tuple[RelationshipConstraint, ...]:
-    """Gather outgoing RelationshipConstraints from merged constraints."""
-    result: list[RelationshipConstraint] = []
-    for rel_type, pairs in constraints.items():
-        target_labels = frozenset(t for s, t in pairs if s == label)
-        if target_labels:
-            result.append(RelationshipConstraint(
-                relationship_type=rel_type,
-                source_labels=frozenset({label}),
-                target_labels=target_labels,
-                properties=PropertySchema(
-                    required=frozenset(), optional=frozenset(), types={},
-                ),
-            ))
-    return tuple(result)
+    return _gather_constraints(label, constraints, "source")
 
 
 def _incoming_merged(
     label: NodeLabel,
     constraints: Dict[RelationshipType, Tuple[Tuple[NodeLabel, NodeLabel], ...]],
 ) -> Tuple[RelationshipConstraint, ...]:
-    """Gather incoming RelationshipConstraints from merged constraints."""
-    result: list[RelationshipConstraint] = []
-    for rel_type, pairs in constraints.items():
-        source_labels = frozenset(s for s, t in pairs if t == label)
-        if source_labels:
-            result.append(RelationshipConstraint(
-                relationship_type=rel_type,
-                source_labels=source_labels,
-                target_labels=frozenset({label}),
-                properties=PropertySchema(
-                    required=frozenset(), optional=frozenset(), types={},
-                ),
-            ))
-    return tuple(result)
+    return _gather_constraints(label, constraints, "target")
 
 
 def merged_ontology() -> Dict[NodeLabel, EntitySchema]:
@@ -551,6 +495,23 @@ def validate_output_format_has_columns(pattern: GraphPattern) -> ValidationResul
     return ValidationResult.success()
 
 
+def _get_output_columns_for_format(
+    pattern: GraphPattern,
+    format_node_id: str,
+    node_map: dict[str, Node],
+) -> list[Node]:
+    """Gather OutputColumn nodes connected to a format via HAS_COLUMN."""
+    column_ids = {
+        rel.end_node_id
+        for rel in pattern.relationships
+        if rel.type == RelationshipType.HAS_COLUMN and rel.start_node_id == format_node_id
+    }
+    return [
+        node_map[cid] for cid in column_ids
+        if cid in node_map and NodeLabel.OUTPUT_COLUMN in node_map[cid].labels
+    ]
+
+
 def validate_output_column_positions_unique(pattern: GraphPattern) -> ValidationResult:
     """Within each OutputFormat's connected OutputColumns, all position values must be unique."""
     format_ids = {
@@ -564,27 +525,9 @@ def validate_output_column_positions_unique(pattern: GraphPattern) -> Validation
 
     errors: list[str] = []
     for fid in sorted(format_ids):
-        column_ids = {
-            rel.end_node_id
-            for rel in pattern.relationships
-            if (
-                rel.type == RelationshipType.HAS_COLUMN
-                and rel.start_node_id == fid
-            )
-        }
-        positions: list[int] = []
-        for cid in column_ids:
-            col_node = node_map.get(cid)
-            if col_node and NodeLabel.OUTPUT_COLUMN in col_node.labels:
-                pos = col_node.properties.get("position")
-                if pos is not None:
-                    positions.append(pos)
-        seen: set[int] = set()
-        duplicates: set[int] = set()
-        for p in positions:
-            if p in seen:
-                duplicates.add(p)
-            seen.add(p)
+        columns = _get_output_columns_for_format(pattern, fid, node_map)
+        positions = [c.properties["position"] for c in columns if "position" in c.properties]
+        duplicates = {p for p in positions if positions.count(p) > 1}
         if duplicates:
             dup_str = ", ".join(str(d) for d in sorted(duplicates))
             errors.append(
@@ -608,45 +551,30 @@ def validate_entry_structure_references_column(pattern: GraphPattern) -> Validat
     node_map = {n.id: n for n in pattern.nodes}
 
     # Find which OutputFormat each EntryStructure is connected to
-    format_to_entry: dict[str, str] = {}
+    format_for_entry: dict[str, str] = {}
     for rel in pattern.relationships:
         if rel.type == RelationshipType.HAS_ENTRY_STRUCTURE:
-            format_to_entry[rel.end_node_id] = rel.start_node_id
+            format_for_entry[rel.end_node_id] = rel.start_node_id
 
     warnings: list[str] = []
     for eid in sorted(entry_ids):
         entry_node = node_map.get(eid)
         if not entry_node:
             continue
-        format_id = format_to_entry.get(eid)
+        format_id = format_for_entry.get(eid)
         if not format_id:
             continue
 
-        # Gather OutputColumn names for this OutputFormat
-        column_names: set[str] = set()
-        for rel in pattern.relationships:
-            if (
-                rel.type == RelationshipType.HAS_COLUMN
-                and rel.start_node_id == format_id
-            ):
-                col_node = node_map.get(rel.end_node_id)
-                if col_node and NodeLabel.OUTPUT_COLUMN in col_node.labels:
-                    name = col_node.properties.get("name")
-                    if name is not None:
-                        column_names.add(name)
+        columns = _get_output_columns_for_format(pattern, format_id, node_map)
+        column_names = {c.properties["name"] for c in columns if "name" in c.properties}
 
-        grouping = entry_node.properties.get("grouping_column")
-        if grouping and grouping not in column_names:
-            warnings.append(
-                f"EntryStructure '{eid}' grouping_column '{grouping}' "
-                f"does not match any OutputColumn name"
-            )
-        date_col = entry_node.properties.get("date_column")
-        if date_col and date_col not in column_names:
-            warnings.append(
-                f"EntryStructure '{eid}' date_column '{date_col}' "
-                f"does not match any OutputColumn name"
-            )
+        for field in ("grouping_column", "date_column"):
+            value = entry_node.properties.get(field)
+            if value and value not in column_names:
+                warnings.append(
+                    f"EntryStructure '{eid}' {field} '{value}' "
+                    f"does not match any OutputColumn name"
+                )
 
     if warnings:
         return ValidationResult.success(warnings=tuple(warnings))

@@ -6,6 +6,19 @@ from typing import Any, Dict, List, Tuple
 from domain.types import GraphPattern, Node, NodeLabel, Relationship
 from persistence.merge_keys import MERGE_KEYS
 
+NODE_ID_KEY = "_node_id"
+
+
+def _resolve_merge_keys(
+    node: Node,
+    merge_keys: Dict[NodeLabel, Tuple[str, ...]],
+) -> Tuple[str, ...]:
+    """Look up merge key names for a node from its first matching label."""
+    for label in node.labels:
+        if label in merge_keys:
+            return merge_keys[label]
+    return ()
+
 
 def _label_string(node: Node) -> str:
     """Build Neo4j label string like ':SourceSchema:Column'."""
@@ -26,19 +39,13 @@ def serialize_node(
     var = f"n{index}"
     label_str = _label_string(node)
 
-    # Determine which label to look up merge keys for
-    # Use the first NodeLabel found (most nodes have exactly one)
-    merge_key_names: Tuple[str, ...] = ()
-    for label in node.labels:
-        if label in merge_keys:
-            merge_key_names = merge_keys[label]
-            break
+    merge_key_names = _resolve_merge_keys(node, merge_keys)
 
     params: Dict[str, Any] = {}
 
     # For Reference nodes with no merge keys, use _node_id as the merge key
     if not merge_key_names:
-        merge_props = f"_node_id: ${var}__node_id"
+        merge_props = f"{NODE_ID_KEY}: ${var}__node_id"
         params[f"{var}__node_id"] = node.id
     else:
         merge_parts = []
@@ -53,7 +60,7 @@ def serialize_node(
 
     # Always store _node_id via SET (unless it's already in MERGE for Reference)
     if merge_key_names:
-        set_parts.append(f"{var}._node_id = ${var}__node_id")
+        set_parts.append(f"{var}.{NODE_ID_KEY} = ${var}__node_id")
         params[f"{var}__node_id"] = node.id
 
     for key, value in node.properties.items():
@@ -68,6 +75,22 @@ def serialize_node(
         cypher += "\nSET " + ", ".join(set_parts)
 
     return cypher, params
+
+
+def _build_node_match(
+    node: Node | None,
+    node_id: str,
+    var: str,
+    merge_keys: Dict[NodeLabel, Tuple[str, ...]],
+    params: Dict[str, Any],
+) -> str:
+    """Build a MATCH clause for a single node endpoint."""
+    if node is not None:
+        label_str = _label_string(node)
+        match_props = _match_props_for_node(node, var, merge_keys, params)
+        return f"MATCH ({var}{label_str} {{{match_props}}})"
+    params[f"{var}__node_id"] = node_id
+    return f"MATCH ({var} {{{NODE_ID_KEY}: ${var}__node_id}})"
 
 
 def serialize_relationship(
@@ -87,35 +110,17 @@ def serialize_relationship(
     if node_index_map is None:
         node_index_map = {}
 
-    start_node = node_map.get(rel.start_node_id)
-    end_node = node_map.get(rel.end_node_id)
-
     params: Dict[str, Any] = {}
     lines: List[str] = []
 
-    # Build MATCH for start node
     start_var = f"s{index}"
-    if start_node is not None:
-        start_label_str = _label_string(start_node)
-        start_match_props = _match_props_for_node(
-            start_node, start_var, merge_keys, params
-        )
-        lines.append(f"MATCH ({start_var}{start_label_str} {{{start_match_props}}})")
-    else:
-        lines.append(f"MATCH ({start_var} {{_node_id: ${start_var}__node_id}})")
-        params[f"{start_var}__node_id"] = rel.start_node_id
-
-    # Build MATCH for end node
     end_var = f"e{index}"
-    if end_node is not None:
-        end_label_str = _label_string(end_node)
-        end_match_props = _match_props_for_node(
-            end_node, end_var, merge_keys, params
-        )
-        lines.append(f"MATCH ({end_var}{end_label_str} {{{end_match_props}}})")
-    else:
-        lines.append(f"MATCH ({end_var} {{_node_id: ${end_var}__node_id}})")
-        params[f"{end_var}__node_id"] = rel.end_node_id
+    lines.append(_build_node_match(
+        node_map.get(rel.start_node_id), rel.start_node_id, start_var, merge_keys, params,
+    ))
+    lines.append(_build_node_match(
+        node_map.get(rel.end_node_id), rel.end_node_id, end_var, merge_keys, params,
+    ))
 
     # MERGE the relationship
     rel_type = rel.type.value
@@ -146,17 +151,13 @@ def _match_props_for_node(
     params: Dict[str, Any],
 ) -> str:
     """Build the property matching string for a MATCH clause."""
-    merge_key_names: Tuple[str, ...] = ()
-    for label in node.labels:
-        if label in merge_keys:
-            merge_key_names = merge_keys[label]
-            break
+    merge_key_names = _resolve_merge_keys(node, merge_keys)
 
     if not merge_key_names:
         # Reference-style: match by _node_id
         param_name = f"{var}__node_id"
         params[param_name] = node.id
-        return f"_node_id: ${param_name}"
+        return f"{NODE_ID_KEY}: ${param_name}"
 
     parts = []
     for key in merge_key_names:
