@@ -888,3 +888,79 @@ class TestBuildPipelineConditions:
         when_rels = [r for r in pattern.relationships if r.type == RelationshipType.WHEN]
         assert len(when_rels) == 0
         assert validate_recipe(pattern).is_valid
+
+
+# ============================================================================
+# TestBuildRecipeNodesNormalization — BUG-001
+# ============================================================================
+
+class TestBuildRecipeNodesNormalization:
+    """Tests for plural/singular key normalization and missing key errors."""
+
+    def _minimal_rule(self, **overrides):
+        """Return a minimal rule spec, applying overrides."""
+        rule = {
+            "rule_name": "test_rule",
+            "source_measure": "total",
+            "priority": 1,
+            "debit": {"slot_id": "dr", "role": "primary", "account_code": "5000", "account_name": "Expense", "account_type": "expense", "normal_balance": "debit"},
+            "credit": {"slot_id": "cr", "role": "offset", "account_code": "2000", "account_name": "AP", "account_type": "liability", "normal_balance": "credit"},
+        }
+        rule.update(overrides)
+        return rule
+
+    def _recipe_spec_with_rules(self, rules):
+        return {
+            "name": "Test Recipe",
+            "source_schema": "test_schema",
+            "rules": rules,
+        }
+
+    def test_plural_keys_normalized(self):
+        """Spec with 'debits'/'credits' (plural) normalizes to singular and produces correct edges."""
+        rule = self._minimal_rule()
+        debit_val = rule.pop("debit")
+        credit_val = rule.pop("credit")
+        rule["debits"] = debit_val
+        rule["credits"] = credit_val
+
+        spec = self._recipe_spec_with_rules([rule])
+        _, _, slots, _, _, _, rels = _build_recipe_nodes(spec, "schema_id", "norm_test")
+        assert len(slots) == 2
+        debit_rels = [r for r in rels if r.type == RelationshipType.DEBITS]
+        credit_rels = [r for r in rels if r.type == RelationshipType.CREDITS]
+        assert len(debit_rels) == 1
+        assert len(credit_rels) == 1
+
+    def test_list_unwrap_single_item(self):
+        """Spec with 'debit': [{...}] (single-item list) unwraps correctly."""
+        rule = self._minimal_rule()
+        rule["debit"] = [rule["debit"]]
+        rule["credit"] = [rule["credit"]]
+
+        spec = self._recipe_spec_with_rules([rule])
+        _, _, slots, _, _, _, rels = _build_recipe_nodes(spec, "schema_id", "list_test")
+        assert len(slots) == 2
+        debit_rels = [r for r in rels if r.type == RelationshipType.DEBITS]
+        credit_rels = [r for r in rels if r.type == RelationshipType.CREDITS]
+        assert len(debit_rels) == 1
+        assert len(credit_rels) == 1
+
+    def test_missing_credit_raises_key_error(self):
+        """Rule with 'debit' but no 'credit' raises KeyError with actionable message."""
+        rule = self._minimal_rule()
+        del rule["credit"]
+
+        spec = self._recipe_spec_with_rules([rule])
+        with pytest.raises(KeyError, match="missing 'credit'"):
+            _build_recipe_nodes(spec, "schema_id", "no_credit")
+
+    def test_missing_both_raises_key_error(self):
+        """Rule with neither 'debit' nor 'credit' raises KeyError."""
+        rule = self._minimal_rule()
+        del rule["debit"]
+        del rule["credit"]
+
+        spec = self._recipe_spec_with_rules([rule])
+        with pytest.raises(KeyError, match="missing 'debit'"):
+            _build_recipe_nodes(spec, "schema_id", "no_both")
