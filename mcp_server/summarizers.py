@@ -1,6 +1,7 @@
 # mcp_server/summarizers.py — Pure functions: GraphPattern → JSON-serializable dicts
 from __future__ import annotations
 
+import json
 from typing import Any, Dict, List, Optional
 
 from domain.types import GraphPattern, Node, NodeLabel, RelationshipType
@@ -63,6 +64,22 @@ def _resolve_account_for_slot(
 def _prop(node: Node, key: str, default: Any = None) -> Any:
     """Safe property access on a Node."""
     return node.properties.get(key, default)
+
+
+def _slot_accounts(
+    pattern: GraphPattern,
+    slots: tuple[Node, ...],
+) -> List[Dict[str, Any]]:
+    """Resolve AccountSlot nodes to their mapped Account summaries."""
+    accounts = []
+    for slot in slots:
+        acct = _resolve_account_for_slot(pattern, slot.id)
+        if acct:
+            accounts.append({
+                "account_code": _prop(acct, "code"),
+                "account_name": _prop(acct, "name"),
+            })
+    return accounts
 
 
 # ============================================================================
@@ -166,7 +183,7 @@ def summarize_processing_instructions(
             }
             group_by_str = _prop(m, "group_by")
             if group_by_str:
-                measure_entry["group_by"] = group_by_str.split(",")
+                measure_entry["group_by"] = json.loads(group_by_str)
             split_by = _prop(m, "split_by")
             if split_by:
                 measure_entry["split_by"] = split_by
@@ -188,24 +205,13 @@ def summarize_processing_instructions(
         for rule in rule_nodes:
             debit_slots, credit_slots = extract_debit_credit_slots(pattern, rule.id)
 
-            def _slot_accounts(slots):
-                accounts = []
-                for slot in slots:
-                    acct = _resolve_account_for_slot(pattern, slot.id)
-                    if acct:
-                        accounts.append({
-                            "account_code": _prop(acct, "code"),
-                            "account_name": _prop(acct, "name"),
-                        })
-                return accounts
-
             rule_entry: Dict[str, Any] = {
                 "priority": _prop(rule, "priority"),
                 "name": _prop(rule, "rule_name"),
                 "source_measure": _prop(rule, "source_measure"),
                 "memo_template": _prop(rule, "memo_template"),
-                "debits": _slot_accounts(debit_slots),
-                "credits": _slot_accounts(credit_slots),
+                "debits": _slot_accounts(pattern, debit_slots),
+                "credits": _slot_accounts(pattern, credit_slots),
             }
 
             conditions = extract_conditions_for_rule(pattern, rule.id)

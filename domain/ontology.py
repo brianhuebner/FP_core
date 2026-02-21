@@ -235,40 +235,49 @@ _DATA_SOURCE_PROPS = PropertySchema(
 )
 
 
-def _outgoing(label: NodeLabel) -> Tuple[RelationshipConstraint, ...]:
-    """Gather all RelationshipConstraints where label is a valid source."""
+def _gather_constraints(
+    label: NodeLabel,
+    constraints: Dict[RelationshipType, Tuple[Tuple[NodeLabel, NodeLabel], ...]],
+    direction: str,
+) -> Tuple[RelationshipConstraint, ...]:
+    """Gather RelationshipConstraints where label appears on the given side.
+
+    direction='source' gathers outgoing constraints (label is source).
+    direction='target' gathers incoming constraints (label is target).
+    """
     result: list[RelationshipConstraint] = []
-    for rel_type, pairs in RELATIONSHIP_CONSTRAINTS.items():
-        source_labels = frozenset(s for s, t in pairs if s == label)
-        if source_labels:
-            target_labels = frozenset(t for s, t in pairs if s == label)
-            result.append(RelationshipConstraint(
-                relationship_type=rel_type,
-                source_labels=frozenset({label}),
-                target_labels=target_labels,
-                properties=PropertySchema(
-                    required=frozenset(), optional=frozenset(), types={},
-                ),
-            ))
+    for rel_type, pairs in constraints.items():
+        if direction == "source":
+            matched = frozenset(t for s, t in pairs if s == label)
+            if matched:
+                result.append(RelationshipConstraint(
+                    relationship_type=rel_type,
+                    source_labels=frozenset({label}),
+                    target_labels=matched,
+                    properties=PropertySchema(
+                        required=frozenset(), optional=frozenset(), types={},
+                    ),
+                ))
+        else:
+            matched = frozenset(s for s, t in pairs if t == label)
+            if matched:
+                result.append(RelationshipConstraint(
+                    relationship_type=rel_type,
+                    source_labels=matched,
+                    target_labels=frozenset({label}),
+                    properties=PropertySchema(
+                        required=frozenset(), optional=frozenset(), types={},
+                    ),
+                ))
     return tuple(result)
+
+
+def _outgoing(label: NodeLabel) -> Tuple[RelationshipConstraint, ...]:
+    return _gather_constraints(label, RELATIONSHIP_CONSTRAINTS, "source")
 
 
 def _incoming(label: NodeLabel) -> Tuple[RelationshipConstraint, ...]:
-    """Gather all RelationshipConstraints where label is a valid target."""
-    result: list[RelationshipConstraint] = []
-    for rel_type, pairs in RELATIONSHIP_CONSTRAINTS.items():
-        target_labels = frozenset(t for s, t in pairs if t == label)
-        if target_labels:
-            source_labels = frozenset(s for s, t in pairs if t == label)
-            result.append(RelationshipConstraint(
-                relationship_type=rel_type,
-                source_labels=source_labels,
-                target_labels=frozenset({label}),
-                properties=PropertySchema(
-                    required=frozenset(), optional=frozenset(), types={},
-                ),
-            ))
-    return tuple(result)
+    return _gather_constraints(label, RELATIONSHIP_CONSTRAINTS, "target")
 
 
 ONTOLOGY: Dict[NodeLabel, EntitySchema] = {

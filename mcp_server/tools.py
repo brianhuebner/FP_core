@@ -32,6 +32,35 @@ from persistence.operations import load_format_by_id, load_pattern_by_recipe, sa
 logger = logging.getLogger("mcp_server")
 
 
+def _error(msg: str, hint: str | None = None) -> str:
+    """Build a consistent JSON error response."""
+    result: dict[str, str] = {"error": msg}
+    if hint is not None:
+        result["hint"] = hint
+    return json.dumps(result, default=str)
+
+
+def _require_format(format_id: str) -> GraphPattern | None:
+    """Return a cached format pattern, auto-loading from Neo4j if needed.
+
+    Returns the GraphPattern, or None if loading fails (caller should
+    check and return an error).
+    """
+    loaded_formats = get_loaded_formats()
+    pattern = loaded_formats.get(format_id)
+    if pattern is not None:
+        return pattern
+    try:
+        conn = get_connection()
+        pattern = load_format_by_id(conn, format_id)
+        if pattern.nodes:
+            loaded_formats[format_id] = pattern
+            return pattern
+    except Exception as e:
+        logger.error("Failed to load format %s: %s", format_id, e)
+    return None
+
+
 @mcp.tool()
 def load_recipe(recipe_id: str) -> str:
     """Load a recipe pipeline graph from Neo4j and return a structured summary.
@@ -47,10 +76,10 @@ def load_recipe(recipe_id: str) -> str:
         pattern = load_pattern_by_recipe(conn, recipe_id)
     except Exception as e:
         logger.error("Failed to load recipe %s: %s", recipe_id, e)
-        return json.dumps({"error": f"Neo4j error: {e}"}, default=str)
+        return _error(f"Neo4j error: {e}")
 
     if not pattern.nodes:
-        return json.dumps({"error": f"No nodes found for recipe_id '{recipe_id}'"})
+        return _error(f"No nodes found for recipe_id '{recipe_id}'")
 
     loaded = get_loaded_recipes()
     loaded[recipe_id] = pattern
@@ -77,10 +106,10 @@ def load_format(format_id: str) -> str:
         pattern = load_format_by_id(conn, format_id)
     except Exception as e:
         logger.error("Failed to load format %s: %s", format_id, e)
-        return json.dumps({"error": f"Neo4j error: {e}"}, default=str)
+        return _error(f"Neo4j error: {e}")
 
     if not pattern.nodes:
-        return json.dumps({"error": f"No nodes found for format_id '{format_id}'"})
+        return _error(f"No nodes found for format_id '{format_id}'")
 
     loaded = get_loaded_formats()
     loaded[format_id] = pattern
@@ -108,29 +137,14 @@ def get_processing_instructions(recipe_id: str, format_id: str | None = None) ->
     loaded = get_loaded_recipes()
     pattern = loaded.get(recipe_id)
     if pattern is None:
-        return json.dumps({
-            "error": f"Recipe '{recipe_id}' not loaded. Call load_recipe first.",
-        })
+        return _error(f"Recipe '{recipe_id}' not loaded. Call load_recipe first.")
 
     # Resolve format pattern if format_id provided
     format_pattern = None
     if format_id:
-        loaded_formats = get_loaded_formats()
-        format_pattern = loaded_formats.get(format_id)
+        format_pattern = _require_format(format_id)
         if format_pattern is None:
-            # Auto-load from Neo4j
-            try:
-                conn = get_connection()
-                format_pattern = load_format_by_id(conn, format_id)
-                if format_pattern.nodes:
-                    loaded_formats[format_id] = format_pattern
-                else:
-                    return json.dumps({
-                        "error": f"No nodes found for format_id '{format_id}'",
-                    })
-            except Exception as e:
-                logger.error("Failed to load format %s: %s", format_id, e)
-                return json.dumps({"error": f"Neo4j error: {e}"}, default=str)
+            return _error(f"No nodes found for format_id '{format_id}'")
 
     instructions = summarize_processing_instructions(pattern, recipe_id, format_pattern)
     return json.dumps(instructions, indent=2, default=str)
@@ -193,37 +207,37 @@ def build_and_save_pipeline(pipeline_spec: str) -> str:
     try:
         spec = json.loads(pipeline_spec)
     except json.JSONDecodeError as e:
-        return json.dumps({"error": f"Invalid JSON: {e}"})
+        return _error(f"Invalid JSON: {e}")
 
     recipe_id = spec.get("recipe_id")
     if not recipe_id:
-        return json.dumps({"error": "Missing required field: recipe_id"})
+        return _error("Missing required field: recipe_id")
 
     # Build the graph pattern from spec
     try:
         pattern = build_pipeline_from_spec(spec)
     except KeyError as e:
         logger.error("Failed to build pipeline %s: missing key %s", recipe_id, e)
-        return json.dumps({
-            "error": f"Build error: missing required field {e}",
-            "hint": (
+        return _error(
+            f"Build error: missing required field {e}",
+            hint=(
                 "Check that all required fields are present. Common issues: "
                 "recipe section needs 'name'; each rule needs 'rule_name', 'source_measure', "
                 "'debit' (singular dict), and 'credit' (singular dict); each account slot "
                 "needs 'slot_id', 'role', 'account_code', 'account_name', 'account_type', "
                 "'normal_balance'. See tool description for a complete example."
             ),
-        }, default=str)
+        )
     except (TypeError, ValueError) as e:
         logger.error("Failed to build pipeline %s: %s", recipe_id, e)
-        return json.dumps({
-            "error": f"Build error: {e}",
-            "hint": (
+        return _error(
+            f"Build error: {e}",
+            hint=(
                 "'debit' and 'credit' must be single dict objects, not arrays. "
                 "Column and measure entries must be dicts with named fields, not lists. "
                 "See tool description for the expected spec shape."
             ),
-        }, default=str)
+        )
 
     # Gate 1 validation
     ontology = merged_ontology()
@@ -254,7 +268,7 @@ def build_and_save_pipeline(pipeline_spec: str) -> str:
         save_counts = save_pattern(conn, pattern)
     except Exception as e:
         logger.error("Failed to save pipeline %s: %s", recipe_id, e)
-        return json.dumps({"error": f"Neo4j save error: {e}"}, default=str)
+        return _error(f"Neo4j save error: {e}")
 
     # Cache the recipe pattern (without output nodes if they were included for compat)
     loaded = get_loaded_recipes()
@@ -284,18 +298,18 @@ def build_output(output_spec: str) -> str:
     try:
         spec = json.loads(output_spec)
     except json.JSONDecodeError as e:
-        return json.dumps({"error": f"Invalid JSON: {e}"})
+        return _error(f"Invalid JSON: {e}")
 
     format_id = spec.get("format_id")
     if not format_id:
-        return json.dumps({"error": "Missing required field: format_id"})
+        return _error("Missing required field: format_id")
 
     # Build the format pattern from spec
     try:
         pattern = build_format_from_spec(spec)
     except (KeyError, TypeError, ValueError) as e:
         logger.error("Failed to build format %s: %s", format_id, e)
-        return json.dumps({"error": f"Build error: {e}"}, default=str)
+        return _error(f"Build error: {e}")
 
     # Gate 1 validation
     ontology = merged_ontology()
@@ -329,7 +343,7 @@ def build_output(output_spec: str) -> str:
         save_counts = save_pattern(conn, pattern)
     except Exception as e:
         logger.error("Failed to save format %s: %s", format_id, e)
-        return json.dumps({"error": f"Neo4j save error: {e}"}, default=str)
+        return _error(f"Neo4j save error: {e}")
 
     # Cache the format
     loaded = get_loaded_formats()
@@ -380,10 +394,10 @@ def validate_entries(entries: str, recipe_id: str | None = None) -> str:
     try:
         entries_list = json.loads(entries)
     except json.JSONDecodeError as e:
-        return json.dumps({"error": f"Invalid JSON: {e}"})
+        return _error(f"Invalid JSON: {e}")
 
     if not isinstance(entries_list, list):
-        return json.dumps({"error": "entries must be a JSON array"})
+        return _error("entries must be a JSON array")
 
     # Look up cached recipe for account checks
     cached_pattern = None
@@ -434,21 +448,21 @@ def validate_entries(entries: str, recipe_id: str | None = None) -> str:
         })
 
     # Account-level checks if recipe is loaded
-    checked_accounts = set()
     if account_map:
-        for entry in entries_list:
-            for line in entry.get("lines", []):
-                acct_code = line.get("account_code")
-                if acct_code and acct_code in account_map and acct_code not in checked_accounts:
-                    checked_accounts.add(acct_code)
-                    acct_node = account_map[acct_code]
-                    is_active = acct_node.properties.get("is_active", True)
-                    posting_result = validate_posting_allowed(is_active)
-                    all_validation_results.append(posting_result)
-                    account_results.append({
-                        "account_code": acct_code,
-                        "is_active": is_active,
-                    })
+        referenced_codes = {
+            line.get("account_code")
+            for entry in entries_list
+            for line in entry.get("lines", [])
+        } & account_map.keys()
+
+        for acct_code in sorted(referenced_codes):
+            acct_node = account_map[acct_code]
+            is_active = acct_node.properties.get("is_active", True)
+            all_validation_results.append(validate_posting_allowed(is_active))
+            account_results.append({
+                "account_code": acct_code,
+                "is_active": is_active,
+            })
 
     merged = ValidationResult.merge(*all_validation_results) if all_validation_results else ValidationResult.success()
 

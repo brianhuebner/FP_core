@@ -85,22 +85,31 @@ def validate_recipe(pattern: GraphPattern) -> ValidationResult:
     )
 
 
+def _extract_connected_nodes(
+    pattern: GraphPattern,
+    start_node_id: str,
+    rel_type: RelationshipType,
+    target_label: NodeLabel,
+) -> Tuple[Node, ...]:
+    """Extract nodes connected from start_node_id via rel_type, filtered by target_label."""
+    target_ids = {
+        rel.end_node_id
+        for rel in pattern.relationships
+        if rel.type == rel_type and rel.start_node_id == start_node_id
+    }
+    return tuple(
+        n for n in pattern.nodes
+        if n.id in target_ids and target_label in n.labels
+    )
+
+
 def extract_measures_for_schema(
     pattern: GraphPattern,
     schema_node_id: str,
 ) -> Tuple[Node, ...]:
     """Extract Measure nodes connected to a SourceSchema via HAS_MEASURE."""
-    measure_ids = {
-        rel.end_node_id
-        for rel in pattern.relationships
-        if (
-            rel.type == RelationshipType.HAS_MEASURE
-            and rel.start_node_id == schema_node_id
-        )
-    }
-    return tuple(
-        n for n in pattern.nodes
-        if n.id in measure_ids and NodeLabel.MEASURE in n.labels
+    return _extract_connected_nodes(
+        pattern, schema_node_id, RelationshipType.HAS_MEASURE, NodeLabel.MEASURE,
     )
 
 
@@ -112,34 +121,12 @@ def extract_debit_credit_slots(
 
     Returns a tuple of (debit_slots, credit_slots).
     """
-    debit_ids = {
-        rel.end_node_id
-        for rel in pattern.relationships
-        if (
-            rel.type == RelationshipType.DEBITS
-            and rel.start_node_id == rule_node_id
-        )
-    }
-    credit_ids = {
-        rel.end_node_id
-        for rel in pattern.relationships
-        if (
-            rel.type == RelationshipType.CREDITS
-            and rel.start_node_id == rule_node_id
-        )
-    }
-
-    node_map = {n.id: n for n in pattern.nodes}
-
-    debit_slots = tuple(
-        node_map[nid] for nid in sorted(debit_ids)
-        if nid in node_map and NodeLabel.ACCOUNT_SLOT in node_map[nid].labels
+    debit_slots = _extract_connected_nodes(
+        pattern, rule_node_id, RelationshipType.DEBITS, NodeLabel.ACCOUNT_SLOT,
     )
-    credit_slots = tuple(
-        node_map[nid] for nid in sorted(credit_ids)
-        if nid in node_map and NodeLabel.ACCOUNT_SLOT in node_map[nid].labels
+    credit_slots = _extract_connected_nodes(
+        pattern, rule_node_id, RelationshipType.CREDITS, NodeLabel.ACCOUNT_SLOT,
     )
-
     return (debit_slots, credit_slots)
 
 
@@ -148,14 +135,8 @@ def extract_conditions_for_rule(
     rule_node_id: str,
 ) -> Tuple[Node, ...]:
     """Extract Condition nodes connected to a MappingRule via WHEN."""
-    condition_ids = {
-        rel.end_node_id
-        for rel in pattern.relationships
-        if rel.type == RelationshipType.WHEN and rel.start_node_id == rule_node_id
-    }
-    return tuple(
-        n for n in pattern.nodes
-        if n.id in condition_ids and NodeLabel.CONDITION in n.labels
+    return _extract_connected_nodes(
+        pattern, rule_node_id, RelationshipType.WHEN, NodeLabel.CONDITION,
     )
 
 
@@ -191,17 +172,8 @@ def extract_output_columns(
     format_node_id: str,
 ) -> Tuple[Node, ...]:
     """Extract OutputColumn nodes connected to an OutputFormat via HAS_COLUMN."""
-    column_ids = {
-        rel.end_node_id
-        for rel in pattern.relationships
-        if (
-            rel.type == RelationshipType.HAS_COLUMN
-            and rel.start_node_id == format_node_id
-        )
-    }
-    return tuple(
-        n for n in pattern.nodes
-        if n.id in column_ids and NodeLabel.OUTPUT_COLUMN in n.labels
+    return _extract_connected_nodes(
+        pattern, format_node_id, RelationshipType.HAS_COLUMN, NodeLabel.OUTPUT_COLUMN,
     )
 
 
@@ -210,17 +182,8 @@ def extract_validation_rules(
     format_node_id: str,
 ) -> Tuple[Node, ...]:
     """Extract ValidationRule nodes connected to an OutputFormat via HAS_VALIDATION."""
-    rule_ids = {
-        rel.end_node_id
-        for rel in pattern.relationships
-        if (
-            rel.type == RelationshipType.HAS_VALIDATION
-            and rel.start_node_id == format_node_id
-        )
-    }
-    return tuple(
-        n for n in pattern.nodes
-        if n.id in rule_ids and NodeLabel.VALIDATION_RULE in n.labels
+    return _extract_connected_nodes(
+        pattern, format_node_id, RelationshipType.HAS_VALIDATION, NodeLabel.VALIDATION_RULE,
     )
 
 
@@ -232,18 +195,10 @@ def extract_entry_structure(
 
     Returns a single node or None (one-to-one relationship).
     """
-    entry_ids = {
-        rel.end_node_id
-        for rel in pattern.relationships
-        if (
-            rel.type == RelationshipType.HAS_ENTRY_STRUCTURE
-            and rel.start_node_id == format_node_id
-        )
-    }
-    for n in pattern.nodes:
-        if n.id in entry_ids and NodeLabel.ENTRY_STRUCTURE in n.labels:
-            return n
-    return None
+    nodes = _extract_connected_nodes(
+        pattern, format_node_id, RelationshipType.HAS_ENTRY_STRUCTURE, NodeLabel.ENTRY_STRUCTURE,
+    )
+    return nodes[0] if nodes else None
 
 
 def validate_output_format(pattern: GraphPattern) -> ValidationResult:

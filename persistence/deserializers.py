@@ -11,6 +11,8 @@ from domain.types import (
     RelationshipType,
 )
 
+NODE_ID_KEY = "_node_id"
+
 
 # Pre-compute reverse lookup: label value string -> NodeLabel enum
 _LABEL_VALUE_MAP: Dict[str, NodeLabel] = {
@@ -33,8 +35,8 @@ def deserialize_node(
     - Unknown label strings go to Node.extra_labels
     - _node_id property is popped and used as Node.id
     """
-    props = dict(properties)  # copy to avoid mutating input
-    node_id = str(props.pop("_node_id", ""))
+    props = dict(properties)  # defensive copy: pop(_node_id) below would mutate caller's dict
+    node_id = str(props.pop(NODE_ID_KEY, ""))
 
     node_labels: Set[NodeLabel] = set()
     extra_labels: set[str] = set()

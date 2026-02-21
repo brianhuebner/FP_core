@@ -210,20 +210,31 @@ class TestBuildRecipePattern:
 # validate_recipe
 # ============================================================================
 
+def _base_recipe_graph():
+    """Build the common nodes and rels for a valid recipe graph.
+
+    Returns (nodes, relationships) with: recipe, schema, rule, debit/credit slots,
+    transforms, has_rule, debits, credits relationships.
+    """
+    recipe = _recipe_node()
+    schema = _schema_node()
+    rule = _rule_node()
+    debit_slot = _slot_node("ds1", "receivable", "debit")
+    credit_slot = _slot_node("cs1", "revenue", "credit")
+
+    transforms = _rel("t1", RelationshipType.TRANSFORMS, "recipe1", "schema1")
+    rule_rel = _rel("rr1", RelationshipType.HAS_RULE, "recipe1", "rule1")
+    dr = _rel("dr1", RelationshipType.DEBITS, "rule1", "ds1")
+    cr = _rel("cr1", RelationshipType.CREDITS, "rule1", "cs1")
+
+    nodes = [recipe, schema, rule, debit_slot, credit_slot]
+    rels = [transforms, rule_rel, dr, cr]
+    return nodes, rels
+
+
 class TestValidateRecipe:
     def test_valid_recipe_passes(self):
-        recipe = _recipe_node()
-        schema = _schema_node()
-        rule = _rule_node()
-        debit_slot = _slot_node("ds1", "receivable", "debit")
-        credit_slot = _slot_node("cs1", "revenue", "credit")
-
-        transforms = _rel("t1", RelationshipType.TRANSFORMS, "recipe1", "schema1")
-        rule_rel = _rel("rr1", RelationshipType.HAS_RULE, "recipe1", "rule1")
-        dr = _rel("dr1", RelationshipType.DEBITS, "rule1", "ds1")
-        cr = _rel("cr1", RelationshipType.CREDITS, "rule1", "cs1")
-        mapped_dr = _rel("md1", RelationshipType.MAPPED_TO, "ds1", "acct1")
-        mapped_cr = _rel("mc1", RelationshipType.MAPPED_TO, "cs1", "acct2")
+        nodes, rels = _base_recipe_graph()
         acct1 = Node(
             id="acct1", labels={NodeLabel.ACCOUNT},
             properties={"code": "1200", "name": "AR", "account_type": "asset", "normal_balance": "debit"},
@@ -232,10 +243,12 @@ class TestValidateRecipe:
             id="acct2", labels={NodeLabel.ACCOUNT},
             properties={"code": "4000", "name": "Revenue", "account_type": "revenue", "normal_balance": "credit"},
         )
+        mapped_dr = _rel("md1", RelationshipType.MAPPED_TO, "ds1", "acct1")
+        mapped_cr = _rel("mc1", RelationshipType.MAPPED_TO, "cs1", "acct2")
 
         pattern = GraphPattern(
-            nodes=[recipe, schema, rule, debit_slot, credit_slot, acct1, acct2],
-            relationships=[transforms, rule_rel, dr, cr, mapped_dr, mapped_cr],
+            nodes=nodes + [acct1, acct2],
+            relationships=rels + [mapped_dr, mapped_cr],
         )
         result = validate_recipe(pattern)
         assert result.is_valid is True
@@ -263,21 +276,8 @@ class TestValidateRecipe:
         assert any("DEBITS" in e for e in result.errors)
 
     def test_recipe_unmapped_slot_warns(self):
-        recipe = _recipe_node()
-        schema = _schema_node()
-        rule = _rule_node()
-        debit_slot = _slot_node("ds1", "receivable", "debit")
-        credit_slot = _slot_node("cs1", "revenue", "credit")
-
-        transforms = _rel("t1", RelationshipType.TRANSFORMS, "recipe1", "schema1")
-        rule_rel = _rel("rr1", RelationshipType.HAS_RULE, "recipe1", "rule1")
-        dr = _rel("dr1", RelationshipType.DEBITS, "rule1", "ds1")
-        cr = _rel("cr1", RelationshipType.CREDITS, "rule1", "cs1")
-
-        pattern = GraphPattern(
-            nodes=[recipe, schema, rule, debit_slot, credit_slot],
-            relationships=[transforms, rule_rel, dr, cr],
-        )
+        nodes, rels = _base_recipe_graph()
+        pattern = GraphPattern(nodes=nodes, relationships=rels)
         result = validate_recipe(pattern)
         assert result.is_valid is True
         assert len(result.warnings) > 0

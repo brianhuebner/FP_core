@@ -46,77 +46,23 @@ class TestRecipeEnumMemberCounts:
 # ============================================================================
 
 class TestRecipeFrozenDataclasses:
-    def test_source_schema_is_frozen(self):
-        ss = SourceSchema(
-            recipe_id="r1", name="Stripe Charges",
-            source_system=SourceType.STRIPE,
-        )
+    @pytest.mark.parametrize("instance, attr, value", [
+        (SourceSchema(recipe_id="r1", name="Stripe Charges", source_system=SourceType.STRIPE), "name", "changed"),
+        (Column(recipe_id="r1", name="amount", position=0, data_type=ColumnDataType.DECIMAL, role=SemanticRole.AMOUNT), "position", 1),
+        (Measure(recipe_id="r1", name="total_amount", operation=AggregationOp.SUM), "operation", AggregationOp.COUNT),
+        (Condition(recipe_id="r1", condition_id="c1", column="status", operator=ConditionOp.EQUALS, value="paid"), "value", "refunded"),
+        (AccountSlot(recipe_id="r1", slot_id="s1", role="revenue", entry_type="credit"), "role", "expense"),
+        (MappingRule(recipe_id="r1", rule_name="charge_rule", source_measure="total_amount"), "rule_name", "changed"),
+        (AccountingRecipe(recipe_id="r1", name="Stripe Revenue", source_schema="stripe_charges"), "name", "changed"),
+        (OutputFormat(format_id="f1", name="QBO Import", target_system="quickbooks", file_format="iif"), "file_format", "csv"),
+        (OutputColumn(format_id="f1", name="Account", position=0, data_type=ColumnDataType.STRING), "name", "changed"),
+    ], ids=[
+        "SourceSchema", "Column", "Measure", "Condition", "AccountSlot",
+        "MappingRule", "AccountingRecipe", "OutputFormat", "OutputColumn",
+    ])
+    def test_frozen_dataclass_rejects_mutation(self, instance, attr, value):
         with pytest.raises(AttributeError):
-            ss.name = "changed"
-
-    def test_column_is_frozen(self):
-        col = Column(
-            recipe_id="r1", name="amount", position=0,
-            data_type=ColumnDataType.DECIMAL, role=SemanticRole.AMOUNT,
-        )
-        with pytest.raises(AttributeError):
-            col.position = 1
-
-    def test_measure_is_frozen(self):
-        m = Measure(
-            recipe_id="r1", name="total_amount",
-            operation=AggregationOp.SUM,
-        )
-        with pytest.raises(AttributeError):
-            m.operation = AggregationOp.COUNT
-
-    def test_condition_is_frozen(self):
-        c = Condition(
-            recipe_id="r1", condition_id="c1",
-            column="status", operator=ConditionOp.EQUALS, value="paid",
-        )
-        with pytest.raises(AttributeError):
-            c.value = "refunded"
-
-    def test_account_slot_is_frozen(self):
-        s = AccountSlot(
-            recipe_id="r1", slot_id="s1",
-            role="revenue", entry_type="credit",
-        )
-        with pytest.raises(AttributeError):
-            s.role = "expense"
-
-    def test_mapping_rule_is_frozen(self):
-        mr = MappingRule(
-            recipe_id="r1", rule_name="charge_rule",
-            source_measure="total_amount",
-        )
-        with pytest.raises(AttributeError):
-            mr.rule_name = "changed"
-
-    def test_accounting_recipe_is_frozen(self):
-        ar = AccountingRecipe(
-            recipe_id="r1", name="Stripe Revenue",
-            source_schema="stripe_charges",
-        )
-        with pytest.raises(AttributeError):
-            ar.name = "changed"
-
-    def test_output_format_is_frozen(self):
-        of = OutputFormat(
-            format_id="f1", name="QBO Import",
-            target_system="quickbooks", file_format="iif",
-        )
-        with pytest.raises(AttributeError):
-            of.file_format = "csv"
-
-    def test_output_column_is_frozen(self):
-        oc = OutputColumn(
-            format_id="f1", name="Account",
-            position=0, data_type=ColumnDataType.STRING,
-        )
-        with pytest.raises(AttributeError):
-            oc.name = "changed"
+            setattr(instance, attr, value)
 
 
 # ============================================================================
