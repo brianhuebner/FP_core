@@ -244,11 +244,17 @@ def _build_recipe_nodes(
                 properties={},
             ))
 
+        # Validate both sides present before creating slots
+        for required_key in ("debit", "credit"):
+            if required_key not in rule_spec or rule_spec[required_key] is None:
+                raise KeyError(
+                    f"Rule '{rule_spec['rule_name']}' is missing '{required_key}'. "
+                    f"Each rule must have both 'debit' and 'credit' (singular dict, not plural 'debits'/'credits')."
+                )
+
         # Process debit and credit sides
         for side_key, rel_type in [("debit", RelationshipType.DEBITS), ("credit", RelationshipType.CREDITS)]:
-            side_spec = rule_spec.get(side_key)
-            if side_spec is None:
-                continue
+            side_spec = rule_spec[side_key]
 
             slot_id_str = side_spec["slot_id"]
             slot_node_id = _generate_node_id(recipe_id, "slot", slot_id_str)
