@@ -38,6 +38,8 @@ class ExampleType:
     new_field: Optional[str] = None  # <-- NEW
 ```
 
+**Immutability check:** All new/modified dataclasses use `frozen=True`. Any new collections use `FrozenSet` or `tuple`, not `list`/`set`/`dict`.
+
 If no L1 changes: state "No Layer 1 changes required" and explain why.
 
 ---
@@ -57,6 +59,8 @@ _EXAMPLE_PROPS = PropertySchema(
     },
 )
 ```
+
+**Declarative check:** All new validation logic is expressed as `PropertySchema`/`EntitySchema` data in the ontology dicts, not as scattered `if` statements. Any new validator function should operate *on* schema data, not duplicate it.
 
 **Validators affected:** List any new or modified validators with signatures.
 
@@ -97,7 +101,7 @@ If no L4 changes: state "No Layer 4 changes required."
 
 ### Tool signatures affected
 
-[Which of the 4 tools change, and how]
+[Which of the 6 tools change, and how]
 
 ### JSON spec format
 
@@ -187,8 +191,10 @@ Describe boundary conditions, empty values, missing optional fields, etc.
 ### Functional constraints
 - [Pure function guarantees, idempotency, etc.]
 
-### Layer boundaries
-- [Import rules that must not be violated]
+### Purity boundaries
+- **New functions that are pure** (no I/O, no side effects): [list]
+- **New functions that touch I/O**: [list — should only be in L4 connection.py or L5 tools.py]
+- **Composition approach**: [How new pieces compose with existing validators/builders — via `.merge()`, via function composition, etc.]
 - domain/ must never import from persistence/ or mcp_server/
 - Pure functions (builders, summarizers) must not import from persistence/
 
@@ -202,11 +208,11 @@ Describe boundary conditions, empty values, missing optional fields, etc.
 |------|--------|
 | `path/to/file.py` | [What changes] |
 
-### Files created
+### Files created (justify each)
 
-| File | Purpose |
-|------|---------|
-| `path/to/new_file.py` | [Why it exists] |
+| File | Why an existing file can't absorb this |
+|------|----------------------------------------|
+| `path/to/new_file.py` | [Justification] |
 
 ### Canonical counts affected
 
@@ -214,6 +220,8 @@ Describe boundary conditions, empty values, missing optional fields, etc.
 |----------|--------|-------|-------|
 | `NodeLabel` | 19 | 19 | 0 |
 | `Total tests` | 347 | [new] | +[n] |
+
+**Count-assertion tests:** For each canonical count that changes, list the specific test assertion that will enforce the new count (e.g., `test_node_label_count` in `test_types.py`). If no existing test covers this count, one must be added.
 
 If no canonical counts change, state "No canonical count changes."
 
