@@ -88,7 +88,7 @@ class NodeLabel(Enum):
     OUTPUT_FORMAT = "OutputFormat"
     OUTPUT_COLUMN = "OutputColumn"
     VALIDATION_RULE = "ValidationRule"
-    BATCH_FORMAT = "BatchFormat"
+    ENTRY_STRUCTURE = "EntryStructure"
     REFERENCE = "Reference"
 
 
@@ -118,7 +118,7 @@ class RelationshipType(Enum):
     DEBITS = "DEBITS"
     CREDITS = "CREDITS"
     HAS_VALIDATION = "HAS_VALIDATION"
-    HAS_BATCH_FORMAT = "HAS_BATCH_FORMAT"
+    HAS_ENTRY_STRUCTURE = "HAS_ENTRY_STRUCTURE"
     USES_REFERENCE = "USES_REFERENCE"
 
 

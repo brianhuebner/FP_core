@@ -121,7 +121,6 @@ schema_pattern = build_source_schema_pattern(
     schema_node=schema,
     column_nodes=columns,
     measure_nodes=measures,
-    condition_nodes=[],
     column_rels=col_rels,
     measure_rels=msr_rels,
     aggregates_rels=agg_rels,
@@ -285,7 +284,7 @@ output_fmt = Node(
     id="fmt_journal",
     labels={NodeLabel.OUTPUT_FORMAT},
     properties={
-        "recipe_id": RECIPE_ID,
+        "format_id": FORMAT_ID,
         "name": "journal_entry_export",
         "target_system": "quickbooks",
         "file_format": "csv",
@@ -346,15 +345,15 @@ val_rels = [
                  start_node_id="fmt_journal", end_node_id="val_balance", properties={}),
 ]
 
-batch = Node(id="batch_payroll", labels={NodeLabel.BATCH_FORMAT}, properties={
-    "recipe_id": RECIPE_ID, "entry_separator": "blank_row",
+entry_struct = Node(id="entry_payroll", labels={NodeLabel.ENTRY_STRUCTURE}, properties={
+    "format_id": FORMAT_ID, "entry_separator": "blank_row",
     "grouping_column": "journal_number", "date_column": "journal_date",
     "description": "Group lines by journal number with blank row separators",
 })
 
-batch_rel = Relationship(
-    id="rel_has_batch", type=RelationshipType.HAS_BATCH_FORMAT,
-    start_node_id="fmt_journal", end_node_id="batch_payroll", properties={},
+entry_struct_rel = Relationship(
+    id="rel_has_entry", type=RelationshipType.HAS_ENTRY_STRUCTURE,
+    start_node_id="fmt_journal", end_node_id="entry_payroll", properties={},
 )
 
 output_pattern = build_output_format_pattern(
@@ -363,8 +362,8 @@ output_pattern = build_output_format_pattern(
     column_rels=out_col_rels,
     validation_nodes=[val_rule],
     validation_rels=val_rels,
-    batch_node=batch,
-    batch_rel=batch_rel,
+    entry_structure_node=entry_struct,
+    entry_structure_rel=entry_struct_rel,
 )
 
 

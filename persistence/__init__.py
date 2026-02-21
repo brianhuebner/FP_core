@@ -12,9 +12,12 @@ from persistence.deserializers import (
 )
 from persistence.connection import Neo4jConnection
 from persistence.operations import (
+    delete_format_by_id,
     delete_pattern_by_recipe,
+    load_format_by_id,
     load_pattern_by_recipe,
     save_pattern,
+    verify_format,
     verify_pattern,
 )
 
@@ -33,8 +36,11 @@ __all__ = [
     # Connection
     "Neo4jConnection",
     # Operations
+    "delete_format_by_id",
     "delete_pattern_by_recipe",
+    "load_format_by_id",
     "load_pattern_by_recipe",
     "save_pattern",
+    "verify_format",
     "verify_pattern",
 ]

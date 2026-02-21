@@ -128,7 +128,6 @@ schema_pattern = build_source_schema_pattern(
     schema_node=schema,
     column_nodes=columns,
     measure_nodes=measures,
-    condition_nodes=[],
     column_rels=col_rels,
     measure_rels=msr_rels,
     aggregates_rels=agg_rels,

@@ -32,24 +32,22 @@ def load_pattern_by_recipe(
 ) -> GraphPattern:
     """Load all nodes and relationships for a recipe from Neo4j.
 
-    Queries nodes where recipe_id or format_id matches, plus one hop
+    Queries nodes where recipe_id matches, plus one hop
     outward for cross-layer nodes (e.g. Account via MAPPED_TO).
     """
     # Find all recipe-scoped nodes
     node_query = """
     MATCH (n)
-    WHERE n.recipe_id = $id OR n.format_id = $id
+    WHERE n.recipe_id = $id
     RETURN labels(n) AS labels, properties(n) AS properties
     """
     node_records = conn.run_query(node_query, {"id": recipe_id})
 
     # Also find nodes one hop away (e.g. Account nodes via MAPPED_TO)
-    # coalesce handles nodes that lack recipe_id/format_id (NULL = $id → NULL,
-    # which would wrongly filter them out without coalesce)
     hop_query = """
     MATCH (n)-[r]-(m)
-    WHERE (n.recipe_id = $id OR n.format_id = $id)
-      AND NOT (coalesce(m.recipe_id, '') = $id OR coalesce(m.format_id, '') = $id)
+    WHERE n.recipe_id = $id
+      AND NOT coalesce(m.recipe_id, '') = $id
     RETURN DISTINCT labels(m) AS labels, properties(m) AS properties
     """
     hop_records = conn.run_query(hop_query, {"id": recipe_id})
@@ -58,10 +56,8 @@ def load_pattern_by_recipe(
     # Find all relationships between found nodes
     rel_query = """
     MATCH (n)-[r]->(m)
-    WHERE (n.recipe_id = $id OR n.format_id = $id
-           OR n._node_id IN $hop_ids)
-      AND (m.recipe_id = $id OR m.format_id = $id
-           OR m._node_id IN $hop_ids)
+    WHERE (n.recipe_id = $id OR n._node_id IN $hop_ids)
+      AND (m.recipe_id = $id OR m._node_id IN $hop_ids)
     RETURN type(r) AS type,
            n._node_id AS start_id,
            m._node_id AS end_id,
@@ -79,6 +75,35 @@ def load_pattern_by_recipe(
     return deserialize_pattern(all_node_records, rel_records)
 
 
+def load_format_by_id(
+    conn: Neo4jConnection,
+    format_id: str,
+) -> GraphPattern:
+    """Load all nodes and relationships for an output format from Neo4j.
+
+    Queries OutputFormat + OutputColumn + ValidationRule + EntryStructure
+    nodes where format_id matches.
+    """
+    node_query = """
+    MATCH (n)
+    WHERE n.format_id = $id
+    RETURN labels(n) AS labels, properties(n) AS properties
+    """
+    node_records = conn.run_query(node_query, {"id": format_id})
+
+    rel_query = """
+    MATCH (n)-[r]->(m)
+    WHERE n.format_id = $id AND m.format_id = $id
+    RETURN type(r) AS type,
+           n._node_id AS start_id,
+           m._node_id AS end_id,
+           properties(r) AS properties
+    """
+    rel_records = conn.run_query(rel_query, {"id": format_id})
+
+    return deserialize_pattern(node_records, rel_records)
+
+
 def delete_pattern_by_recipe(
     conn: Neo4jConnection,
     recipe_id: str,
@@ -86,10 +111,23 @@ def delete_pattern_by_recipe(
     """Delete all nodes (and their relationships) for a recipe."""
     query = """
     MATCH (n)
-    WHERE n.recipe_id = $id OR n.format_id = $id
+    WHERE n.recipe_id = $id
     DETACH DELETE n
     """
     return conn.run_write(query, {"id": recipe_id})
+
+
+def delete_format_by_id(
+    conn: Neo4jConnection,
+    format_id: str,
+) -> Dict[str, int]:
+    """Delete all nodes (and their relationships) for an output format."""
+    query = """
+    MATCH (n)
+    WHERE n.format_id = $id
+    DETACH DELETE n
+    """
+    return conn.run_write(query, {"id": format_id})
 
 
 def verify_pattern(
@@ -99,17 +137,40 @@ def verify_pattern(
     """Count nodes and relationships for a recipe (diagnostic)."""
     node_query = """
     MATCH (n)
-    WHERE n.recipe_id = $id OR n.format_id = $id
+    WHERE n.recipe_id = $id
     RETURN count(n) AS node_count
     """
     rel_query = """
     MATCH (n)-[r]->(m)
-    WHERE (n.recipe_id = $id OR n.format_id = $id)
-      AND (m.recipe_id = $id OR m.format_id = $id)
+    WHERE n.recipe_id = $id AND m.recipe_id = $id
     RETURN count(r) AS rel_count
     """
     node_result = conn.run_query(node_query, {"id": recipe_id})
     rel_result = conn.run_query(rel_query, {"id": recipe_id})
+
+    return {
+        "nodes": node_result[0]["node_count"] if node_result else 0,
+        "relationships": rel_result[0]["rel_count"] if rel_result else 0,
+    }
+
+
+def verify_format(
+    conn: Neo4jConnection,
+    format_id: str,
+) -> Dict[str, int]:
+    """Count nodes and relationships for an output format (diagnostic)."""
+    node_query = """
+    MATCH (n)
+    WHERE n.format_id = $id
+    RETURN count(n) AS node_count
+    """
+    rel_query = """
+    MATCH (n)-[r]->(m)
+    WHERE n.format_id = $id AND m.format_id = $id
+    RETURN count(r) AS rel_count
+    """
+    node_result = conn.run_query(node_query, {"id": format_id})
+    rel_result = conn.run_query(rel_query, {"id": format_id})
 
     return {
         "nodes": node_result[0]["node_count"] if node_result else 0,

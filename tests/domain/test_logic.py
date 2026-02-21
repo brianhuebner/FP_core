@@ -13,7 +13,8 @@ from domain.logic import (
     build_recipe_pattern,
     build_source_schema_pattern,
     compose_pipeline_pattern,
-    extract_batch_format,
+    extract_conditions_for_rule,
+    extract_entry_structure,
     extract_debit_credit_slots,
     extract_measures_for_schema,
     extract_output_columns,
@@ -21,6 +22,7 @@ from domain.logic import (
     validate_output_format,
     validate_pipeline_connectivity,
     validate_recipe,
+    validate_when_targets,
 )
 
 
@@ -102,7 +104,6 @@ class TestBuildSourceSchemaPattern:
         schema = _schema_node()
         col = _column_node()
         measure = _measure_node()
-        cond = _condition_node()
         col_rel = _rel("r1", RelationshipType.HAS_COLUMN, "schema1", "col1")
         meas_rel = _rel("r2", RelationshipType.HAS_MEASURE, "schema1", "m1")
         agg_rel = _rel("r3", RelationshipType.AGGREGATES, "m1", "col1")
@@ -111,14 +112,13 @@ class TestBuildSourceSchemaPattern:
             schema_node=schema,
             column_nodes=[col],
             measure_nodes=[measure],
-            condition_nodes=[cond],
             column_rels=[col_rel],
             measure_rels=[meas_rel],
             aggregates_rels=[agg_rel],
         )
 
         assert isinstance(pattern, GraphPattern)
-        assert len(pattern.nodes) == 4
+        assert len(pattern.nodes) == 3
         assert len(pattern.relationships) == 3
 
     def test_without_aggregates(self):
@@ -130,7 +130,6 @@ class TestBuildSourceSchemaPattern:
             schema_node=schema,
             column_nodes=[col],
             measure_nodes=[],
-            condition_nodes=[],
             column_rels=[col_rel],
             measure_rels=[],
         )
@@ -147,7 +146,6 @@ class TestBuildSourceSchemaPattern:
             schema_node=schema,
             column_nodes=[col],
             measure_nodes=[],
-            condition_nodes=[],
             column_rels=[col_rel],
             measure_rels=[],
         )
@@ -383,7 +381,7 @@ class TestExtractDebitCreditSlots:
 def _format_node(node_id="fmt1"):
     return Node(
         id=node_id, labels={NodeLabel.OUTPUT_FORMAT},
-        properties={"recipe_id": "r1", "name": "JE Export", "target_system": "sage", "file_format": "csv"},
+        properties={"format_id": "f1", "name": "JE Export", "target_system": "sage", "file_format": "csv"},
     )
 
 
@@ -401,11 +399,11 @@ def _validation_rule_node(node_id="vr1", name="balance_check"):
     )
 
 
-def _batch_format_node(node_id="bf1"):
+def _entry_structure_node(node_id="es1"):
     return Node(
-        id=node_id, labels={NodeLabel.BATCH_FORMAT},
+        id=node_id, labels={NodeLabel.ENTRY_STRUCTURE},
         properties={
-            "recipe_id": "r1", "entry_separator": "newline",
+            "format_id": "f1", "entry_separator": "newline",
             "grouping_column": "entity", "date_column": "posting_date",
         },
     )
@@ -433,14 +431,14 @@ class TestBuildOutputFormatPattern:
         assert len(pattern.nodes) == 3
         assert len(pattern.relationships) == 2
 
-    def test_with_validation_and_batch(self):
+    def test_with_validation_and_entry_structure(self):
         fmt = _format_node()
         col = _output_column_node()
         cr = _rel("cr1", RelationshipType.HAS_COLUMN, "fmt1", "oc1")
         vr = _validation_rule_node()
         vr_rel = _rel("vr1", RelationshipType.HAS_VALIDATION, "fmt1", "vr1")
-        bf = _batch_format_node()
-        bf_rel = _rel("bf1", RelationshipType.HAS_BATCH_FORMAT, "fmt1", "bf1")
+        es = _entry_structure_node()
+        es_rel = _rel("es1", RelationshipType.HAS_ENTRY_STRUCTURE, "fmt1", "es1")
 
         pattern = build_output_format_pattern(
             format_node=fmt,
@@ -448,8 +446,8 @@ class TestBuildOutputFormatPattern:
             column_rels=[cr],
             validation_nodes=[vr],
             validation_rels=[vr_rel],
-            batch_node=bf,
-            batch_rel=bf_rel,
+            entry_structure_node=es,
+            entry_structure_rel=es_rel,
         )
 
         assert len(pattern.nodes) == 4
@@ -553,29 +551,29 @@ class TestExtractValidationRules:
 
 
 # ============================================================================
-# extract_batch_format
+# extract_entry_structure
 # ============================================================================
 
-class TestExtractBatchFormat:
-    def test_extracts_connected_batch(self):
+class TestExtractEntryStructure:
+    def test_extracts_connected_entry_structure(self):
         fmt = _format_node()
-        bf = _batch_format_node()
-        rel = _rel("br1", RelationshipType.HAS_BATCH_FORMAT, "fmt1", "bf1")
+        es = _entry_structure_node()
+        rel = _rel("er1", RelationshipType.HAS_ENTRY_STRUCTURE, "fmt1", "es1")
 
-        pattern = GraphPattern(nodes=[fmt, bf], relationships=[rel])
-        result = extract_batch_format(pattern, "fmt1")
+        pattern = GraphPattern(nodes=[fmt, es], relationships=[rel])
+        result = extract_entry_structure(pattern, "fmt1")
         assert result is not None
-        assert result.id == "bf1"
+        assert result.id == "es1"
 
-    def test_returns_none_for_no_batch(self):
+    def test_returns_none_for_no_entry_structure(self):
         fmt = _format_node()
         pattern = GraphPattern(nodes=[fmt], relationships=[])
-        result = extract_batch_format(pattern, "fmt1")
+        result = extract_entry_structure(pattern, "fmt1")
         assert result is None
 
     def test_returns_none_for_unknown_format(self):
         pattern = GraphPattern(nodes=[], relationships=[])
-        result = extract_batch_format(pattern, "nonexistent")
+        result = extract_entry_structure(pattern, "nonexistent")
         assert result is None
 
 
@@ -590,12 +588,12 @@ class TestValidateOutputFormat:
         col2 = _output_column_node("oc2", "posting_date", 1)
         cr1 = _rel("cr1", RelationshipType.HAS_COLUMN, "fmt1", "oc1")
         cr2 = _rel("cr2", RelationshipType.HAS_COLUMN, "fmt1", "oc2")
-        bf = _batch_format_node()
-        br = _rel("br1", RelationshipType.HAS_BATCH_FORMAT, "fmt1", "bf1")
+        es = _entry_structure_node()
+        er = _rel("er1", RelationshipType.HAS_ENTRY_STRUCTURE, "fmt1", "es1")
 
         pattern = GraphPattern(
-            nodes=[fmt, col1, col2, bf],
-            relationships=[cr1, cr2, br],
+            nodes=[fmt, col1, col2, es],
+            relationships=[cr1, cr2, er],
         )
         result = validate_output_format(pattern)
         assert result.is_valid is True
@@ -622,16 +620,16 @@ class TestValidateOutputFormat:
         assert result.is_valid is False
         assert any("duplicate" in e for e in result.errors)
 
-    def test_batch_column_mismatch_warns(self):
+    def test_entry_structure_column_mismatch_warns(self):
         fmt = _format_node()
         col1 = _output_column_node("oc1", "date", 0)
         cr1 = _rel("cr1", RelationshipType.HAS_COLUMN, "fmt1", "oc1")
-        bf = _batch_format_node()  # references "entity" and "posting_date", neither match "date"
-        br = _rel("br1", RelationshipType.HAS_BATCH_FORMAT, "fmt1", "bf1")
+        es = _entry_structure_node()  # references "entity" and "posting_date", neither match "date"
+        er = _rel("er1", RelationshipType.HAS_ENTRY_STRUCTURE, "fmt1", "es1")
 
         pattern = GraphPattern(
-            nodes=[fmt, col1, bf],
-            relationships=[cr1, br],
+            nodes=[fmt, col1, es],
+            relationships=[cr1, er],
         )
         result = validate_output_format(pattern)
         assert result.is_valid is True
@@ -738,3 +736,99 @@ class TestValidatePipelineConnectivity:
         assert result.is_valid is False
         assert len(result.errors) == 1
         assert "schema2" in result.errors[0]
+
+
+# ============================================================================
+# extract_conditions_for_rule
+# ============================================================================
+
+class TestExtractConditionsForRule:
+    def test_single_when_condition(self):
+        rule = _rule_node("rule1")
+        cond = _condition_node("cond1")
+        when_rel = _rel("w1", RelationshipType.WHEN, "rule1", "cond1")
+
+        pattern = GraphPattern(nodes=[rule, cond], relationships=[when_rel])
+        result = extract_conditions_for_rule(pattern, "rule1")
+
+        assert len(result) == 1
+        assert result[0].id == "cond1"
+
+    def test_multiple_when_conditions(self):
+        rule = _rule_node("rule1")
+        cond1 = _condition_node("cond1")
+        cond2 = Node(
+            id="cond2", labels={NodeLabel.CONDITION},
+            properties={"recipe_id": "r1", "condition_id": "c2", "column": "type", "operator": "equals"},
+        )
+        w1 = _rel("w1", RelationshipType.WHEN, "rule1", "cond1")
+        w2 = _rel("w2", RelationshipType.WHEN, "rule1", "cond2")
+
+        pattern = GraphPattern(nodes=[rule, cond1, cond2], relationships=[w1, w2])
+        result = extract_conditions_for_rule(pattern, "rule1")
+
+        assert len(result) == 2
+        cond_ids = {c.id for c in result}
+        assert "cond1" in cond_ids
+        assert "cond2" in cond_ids
+
+    def test_no_when_conditions(self):
+        rule = _rule_node("rule1")
+        pattern = GraphPattern(nodes=[rule], relationships=[])
+        result = extract_conditions_for_rule(pattern, "rule1")
+
+        assert len(result) == 0
+
+    def test_only_returns_for_specified_rule(self):
+        rule1 = _rule_node("rule1")
+        rule2 = Node(
+            id="rule2", labels={NodeLabel.MAPPING_RULE},
+            properties={"recipe_id": "r1", "rule_name": "other_rule", "source_measure": "m"},
+        )
+        cond1 = _condition_node("cond1")
+        cond2 = Node(
+            id="cond2", labels={NodeLabel.CONDITION},
+            properties={"recipe_id": "r1", "condition_id": "c2", "column": "type", "operator": "equals"},
+        )
+        w1 = _rel("w1", RelationshipType.WHEN, "rule1", "cond1")
+        w2 = _rel("w2", RelationshipType.WHEN, "rule2", "cond2")
+
+        pattern = GraphPattern(nodes=[rule1, rule2, cond1, cond2], relationships=[w1, w2])
+        result = extract_conditions_for_rule(pattern, "rule1")
+
+        assert len(result) == 1
+        assert result[0].id == "cond1"
+
+
+# ============================================================================
+# validate_when_targets
+# ============================================================================
+
+class TestValidateWhenTargets:
+    def test_valid_when_targets(self):
+        rule = _rule_node("rule1")
+        cond = _condition_node("cond1")
+        when_rel = _rel("w1", RelationshipType.WHEN, "rule1", "cond1")
+
+        pattern = GraphPattern(nodes=[rule, cond], relationships=[when_rel])
+        result = validate_when_targets(pattern)
+
+        assert result.is_valid is True
+
+    def test_dangling_when_target(self):
+        rule = _rule_node("rule1")
+        # cond1 node is absent from pattern
+        when_rel = _rel("w1", RelationshipType.WHEN, "rule1", "cond1")
+
+        pattern = GraphPattern(nodes=[rule], relationships=[when_rel])
+        result = validate_when_targets(pattern)
+
+        assert result.is_valid is False
+        assert any("cond1" in e for e in result.errors)
+
+    def test_no_when_rels_passes(self):
+        rule = _rule_node("rule1")
+        pattern = GraphPattern(nodes=[rule], relationships=[])
+        result = validate_when_targets(pattern)
+
+        assert result.is_valid is True

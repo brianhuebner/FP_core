@@ -27,10 +27,10 @@ MERGE_KEYS: Dict[NodeLabel, Tuple[str, ...]] = {
     NodeLabel.ACCOUNT_SLOT:         ("recipe_id", "slot_id"),
     NodeLabel.MAPPING_RULE:         ("recipe_id", "rule_name"),
     NodeLabel.ACCOUNTING_RECIPE:    ("recipe_id",),
-    NodeLabel.OUTPUT_FORMAT:        ("recipe_id", "name"),
+    NodeLabel.OUTPUT_FORMAT:        ("format_id",),
     NodeLabel.OUTPUT_COLUMN:        ("format_id", "name"),
     NodeLabel.VALIDATION_RULE:      ("format_id", "name"),
-    NodeLabel.BATCH_FORMAT:         ("recipe_id",),
+    NodeLabel.ENTRY_STRUCTURE:      ("format_id",),
     NodeLabel.REFERENCE:            (),  # Opaque — falls back to _node_id
 }
 
