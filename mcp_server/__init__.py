@@ -29,8 +29,35 @@ _transport = os.environ.get("MCP_TRANSPORT", "stdio")
 _host = os.environ.get("MCP_HOST", "0.0.0.0")
 _port = int(os.environ.get("MCP_PORT", os.environ.get("PORT", "8000")))
 
+# Auth0 OAuth configuration (only active for HTTP transport)
+_auth0_domain = os.environ.get("AUTH0_DOMAIN")
+_auth0_audience = os.environ.get("AUTH0_AUDIENCE")
+
+if _transport in ("streamable-http", "http") and _auth0_domain and _auth0_audience:
+    from mcp.server.auth.settings import AuthSettings
+
+    from mcp_server.auth import Auth0TokenVerifier
+
+    _token_verifier = Auth0TokenVerifier(domain=_auth0_domain, audience=_auth0_audience)
+    _resource_url = os.environ.get(
+        "MCP_RESOURCE_URL", f"http://localhost:{_port}/mcp"
+    )
+    _auth_settings = AuthSettings(
+        issuer_url=f"https://{_auth0_domain}",
+        resource_server_url=_resource_url,
+    )
+else:
+    _token_verifier = None
+    _auth_settings = None
+
 # FastMCP server instance — host/port configured for HTTP transport
-mcp = FastMCP("FP_core", host=_host, port=_port)
+mcp = FastMCP(
+    "FP_core",
+    host=_host,
+    port=_port,
+    token_verifier=_token_verifier,
+    auth=_auth_settings,
+)
 
 # Server-side state: loaded recipe graphs keyed by recipe_id
 _loaded_recipes: Dict[str, GraphPattern] = {}
@@ -77,17 +104,6 @@ def main():
     logger.info("Starting FP_core MCP server (transport=%s)", _transport)
 
     if _transport in ("streamable-http", "http"):
-        auth_token = os.environ.get("MCP_AUTH_TOKEN")
-        if auth_token:
-            from mcp_server.auth import BearerTokenMiddleware
-
-            app = mcp.streamable_http_app()
-            app.add_middleware(BearerTokenMiddleware, token=auth_token)
-
-            import uvicorn
-
-            uvicorn.run(app, host=_host, port=_port)
-        else:
-            mcp.run(transport="streamable-http")
+        mcp.run(transport="streamable-http")
     else:
         mcp.run(transport="stdio")

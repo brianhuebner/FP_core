@@ -110,10 +110,10 @@ Defined in `mcp_server/__init__.py`:
 |-----------|------|-------|
 | `tests/mcp_server/test_builders.py` | Pure | ~54 |
 | `tests/mcp_server/test_summarizers.py` | Pure | ~55 |
-| `tests/mcp_server/test_transport.py` | Pure (mocked) | 6 |
-| `tests/mcp_server/test_auth.py` | Pure (Starlette TestClient) | 4 |
+| `tests/mcp_server/test_transport.py` | Pure (mocked) | 9 |
+| `tests/mcp_server/test_auth.py` | Pure (mocked JWKS) | 6 |
 
-**Total: ~119 tests, all pure (no Neo4j, no live server)**
+**Total: ~124 tests, all pure (no Neo4j, no live server)**
 
 ```bash
 pytest tests/mcp_server/
@@ -155,8 +155,14 @@ Transport is selected via environment variables. Default is STDIO (backward comp
 | `MCP_TRANSPORT` | `stdio` | Transport mode: `stdio` or `streamable-http` (alias: `http`) |
 | `MCP_HOST` | `0.0.0.0` | Bind address for HTTP transport |
 | `MCP_PORT` | `8000` | Listen port (falls back to `PORT` env var for Railway) |
-| `MCP_AUTH_TOKEN` | *(none)* | If set, enables bearer-token auth on HTTP transport |
+| `AUTH0_DOMAIN` | *(none)* | Auth0 tenant domain, e.g. `your-tenant.us.auth0.com` |
+| `AUTH0_AUDIENCE` | *(none)* | Auth0 API identifier / audience claim |
+| `MCP_RESOURCE_URL` | *(derived)* | Public URL of MCP server for RFC 9728 metadata |
 
-### Auth Middleware (`auth.py`)
+### OAuth Authentication (`auth.py`)
 
-When `MCP_AUTH_TOKEN` is set and transport is HTTP, `BearerTokenMiddleware` (Starlette middleware) rejects requests without a valid `Authorization: Bearer <token>` header with 401. Ignored for STDIO transport.
+When `AUTH0_DOMAIN` and `AUTH0_AUDIENCE` are set and transport is HTTP, `Auth0TokenVerifier` validates Auth0-issued JWTs (RS256, JWKS-verified). FastMCP's built-in OAuth middleware handles bearer extraction, token verification, and RFC 9728 protected resource metadata. STDIO transport ignores all auth env vars.
+
+Auto-generated endpoints (when OAuth is active):
+- `GET /.well-known/oauth-protected-resource/mcp` — RFC 9728 metadata (points Claude Desktop to Auth0)
+- `POST /mcp` — MCP requests (requires valid bearer token)

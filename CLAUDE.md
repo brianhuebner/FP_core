@@ -55,11 +55,11 @@ python -m mcp_server
 # Run MCP server with HTTP transport
 MCP_TRANSPORT=streamable-http MCP_PORT=8000 python -m mcp_server
 
-# Run with bearer token auth
-MCP_TRANSPORT=streamable-http MCP_AUTH_TOKEN=my-secret python -m mcp_server
+# Run with Auth0 OAuth
+MCP_TRANSPORT=streamable-http AUTH0_DOMAIN=your-tenant.us.auth0.com AUTH0_AUDIENCE=https://your-app.example.com/mcp python -m mcp_server
 ```
 
-Python 3.12, no build step, no linter configured. Dependencies beyond stdlib: pytest, neo4j>=5.0, mcp[cli], python-dotenv, uvicorn. See `requirements.txt`.
+Python 3.12, no build step, no linter configured. Dependencies beyond stdlib: pytest, neo4j>=5.0, mcp[cli], python-dotenv, uvicorn, PyJWT[crypto]. See `requirements.txt`.
 
 ## File Map
 
