@@ -2,7 +2,7 @@
 
 ## Quick Context
 
-Model Context Protocol (MCP) server exposing the FP_core knowledge graph to AI agents. Runs over STDIO transport. Contains pure builder/summarizer functions plus tool handlers that compose domain logic with persistence operations. This is the top layer — it consumes from both domain/ and persistence/ but nothing consumes from it.
+Model Context Protocol (MCP) server exposing the FP_core knowledge graph to AI agents. Supports both STDIO transport (local, default) and Streamable HTTP transport (remote, network-accessible). Contains pure builder/summarizer functions plus tool handlers that compose domain logic with persistence operations. This is the top layer — it consumes from both domain/ and persistence/ but nothing consumes from it.
 
 **Architecture Layer:** 5 (MCP Server)
 **Primary Responsibility:** Expose accounting knowledge graph operations as MCP tools, resources, and prompts
@@ -110,8 +110,10 @@ Defined in `mcp_server/__init__.py`:
 |-----------|------|-------|
 | `tests/mcp_server/test_builders.py` | Pure | ~54 |
 | `tests/mcp_server/test_summarizers.py` | Pure | ~55 |
+| `tests/mcp_server/test_transport.py` | Pure (mocked) | 6 |
+| `tests/mcp_server/test_auth.py` | Pure (Starlette TestClient) | 4 |
 
-**Total: ~109 tests, all pure (no Neo4j, no MCP transport)**
+**Total: ~119 tests, all pure (no Neo4j, no live server)**
 
 ```bash
 pytest tests/mcp_server/
@@ -135,9 +137,26 @@ Builder tests verify JSON spec → GraphPattern conversion. Summarizer tests ver
 - `load_pattern_by_recipe` (used by load_recipe)
 - `load_format_by_id` (used by load_format, get_processing_instructions)
 
-**Provides to:** External AI agents via MCP protocol (STDIO transport)
+**Provides to:** External AI agents via MCP protocol (STDIO or Streamable HTTP transport)
 
 **Boundary Rules:**
 - mcp_server/ may import from both domain/ and persistence/
 - Neither domain/ nor persistence/ may import from mcp_server/
 - Pure functions (builders, summarizers) must not import from persistence/ — only tools.py touches I/O
+
+---
+
+## Transport Configuration
+
+Transport is selected via environment variables. Default is STDIO (backward compatible).
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `MCP_TRANSPORT` | `stdio` | Transport mode: `stdio` or `streamable-http` (alias: `http`) |
+| `MCP_HOST` | `0.0.0.0` | Bind address for HTTP transport |
+| `MCP_PORT` | `8000` | Listen port (falls back to `PORT` env var for Railway) |
+| `MCP_AUTH_TOKEN` | *(none)* | If set, enables bearer-token auth on HTTP transport |
+
+### Auth Middleware (`auth.py`)
+
+When `MCP_AUTH_TOKEN` is set and transport is HTTP, `BearerTokenMiddleware` (Starlette middleware) rejects requests without a valid `Authorization: Bearer <token>` header with 401. Ignored for STDIO transport.

@@ -24,8 +24,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger("mcp_server")
 
-# FastMCP server instance
-mcp = FastMCP("FP_core")
+# Transport configuration from environment
+_transport = os.environ.get("MCP_TRANSPORT", "stdio")
+_host = os.environ.get("MCP_HOST", "0.0.0.0")
+_port = int(os.environ.get("MCP_PORT", os.environ.get("PORT", "8000")))
+
+# FastMCP server instance — host/port configured for HTTP transport
+mcp = FastMCP("FP_core", host=_host, port=_port)
 
 # Server-side state: loaded recipe graphs keyed by recipe_id
 _loaded_recipes: Dict[str, GraphPattern] = {}
@@ -68,6 +73,21 @@ import mcp_server.prompts  # noqa: E402, F401
 
 
 def main():
-    """Run the MCP server over STDIO transport."""
-    logger.info("Starting FP_core MCP server")
-    mcp.run(transport="stdio")
+    """Run the MCP server. Transport selected by MCP_TRANSPORT env var."""
+    logger.info("Starting FP_core MCP server (transport=%s)", _transport)
+
+    if _transport in ("streamable-http", "http"):
+        auth_token = os.environ.get("MCP_AUTH_TOKEN")
+        if auth_token:
+            from mcp_server.auth import BearerTokenMiddleware
+
+            app = mcp.streamable_http_app()
+            app.add_middleware(BearerTokenMiddleware, token=auth_token)
+
+            import uvicorn
+
+            uvicorn.run(app, host=_host, port=_port)
+        else:
+            mcp.run(transport="streamable-http")
+    else:
+        mcp.run(transport="stdio")

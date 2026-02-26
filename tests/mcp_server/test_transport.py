@@ -1,0 +1,100 @@
+# tests/mcp_server/test_transport.py — transport selection tests
+from __future__ import annotations
+
+from unittest.mock import patch
+
+import pytest
+
+
+class TestTransportSelection:
+    """Verify main() selects transport based on MCP_TRANSPORT env var."""
+
+    def test_default_transport_is_stdio(self):
+        """MCP_TRANSPORT unset → main() calls mcp.run(transport='stdio')."""
+        env = {"MCP_TRANSPORT": "stdio"}
+        with patch.dict("os.environ", env, clear=False):
+            # Re-import to pick up env vars
+            import importlib
+            import mcp_server
+
+            importlib.reload(mcp_server)
+
+            with patch.object(mcp_server.mcp, "run") as mock_run:
+                mcp_server.main()
+                mock_run.assert_called_once_with(transport="stdio")
+
+    def test_http_transport_selection(self):
+        """MCP_TRANSPORT=streamable-http → main() calls mcp.run(transport='streamable-http')."""
+        env = {"MCP_TRANSPORT": "streamable-http"}
+        with patch.dict("os.environ", env, clear=False):
+            import importlib
+            import mcp_server
+
+            importlib.reload(mcp_server)
+
+            with patch.object(mcp_server.mcp, "run") as mock_run:
+                mcp_server.main()
+                mock_run.assert_called_once_with(transport="streamable-http")
+
+    def test_http_alias_transport_selection(self):
+        """MCP_TRANSPORT=http → same as streamable-http."""
+        env = {"MCP_TRANSPORT": "http"}
+        with patch.dict("os.environ", env, clear=False):
+            import importlib
+            import mcp_server
+
+            importlib.reload(mcp_server)
+
+            with patch.object(mcp_server.mcp, "run") as mock_run:
+                mcp_server.main()
+                mock_run.assert_called_once_with(transport="streamable-http")
+
+    def test_host_and_port_from_env(self):
+        """MCP_HOST and MCP_PORT env vars are passed to FastMCP constructor."""
+        env = {
+            "MCP_TRANSPORT": "streamable-http",
+            "MCP_HOST": "192.168.1.1",
+            "MCP_PORT": "9999",
+        }
+        with patch.dict("os.environ", env, clear=False):
+            import importlib
+            import mcp_server
+
+            importlib.reload(mcp_server)
+
+            assert mcp_server._host == "192.168.1.1"
+            assert mcp_server._port == 9999
+            assert mcp_server.mcp.settings.host == "192.168.1.1"
+            assert mcp_server.mcp.settings.port == 9999
+
+    def test_default_host_and_port(self):
+        """Defaults to 0.0.0.0:8000 when env vars not set."""
+        env = {"MCP_TRANSPORT": "streamable-http"}
+        # Remove MCP_HOST, MCP_PORT, PORT if present
+        with patch.dict("os.environ", env, clear=False):
+            import os
+            os.environ.pop("MCP_HOST", None)
+            os.environ.pop("MCP_PORT", None)
+            os.environ.pop("PORT", None)
+
+            import importlib
+            import mcp_server
+
+            importlib.reload(mcp_server)
+
+            assert mcp_server._host == "0.0.0.0"
+            assert mcp_server._port == 8000
+
+    def test_railway_port_fallback(self):
+        """PORT env var (Railway-injected) is used when MCP_PORT is not set."""
+        env = {"MCP_TRANSPORT": "streamable-http", "PORT": "3000"}
+        with patch.dict("os.environ", env, clear=False):
+            import os
+            os.environ.pop("MCP_PORT", None)
+
+            import importlib
+            import mcp_server
+
+            importlib.reload(mcp_server)
+
+            assert mcp_server._port == 3000

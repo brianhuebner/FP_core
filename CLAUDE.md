@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-FP_core is an **accounting knowledge graph** built on a domain-driven ontology. It models accounting concepts (accounts, transactions, entities, dimensions) as a graph with typed nodes and relationships, designed for Neo4j. The system enforces double-entry accounting semantics while allowing professional flexibility — it guides but doesn't block. It also models recipe/pipeline concepts for transforming source data into accounting entries. Implements Layers 1-5: types, ontology/validation, pure logic, Neo4j persistence, and MCP server.
+FP_core is an **accounting knowledge graph** built on a domain-driven ontology. It models accounting concepts (accounts, transactions, entities, dimensions) as a graph with typed nodes and relationships, designed for Neo4j. The system enforces double-entry accounting semantics while allowing professional flexibility — it guides but doesn't block. It also models recipe/pipeline concepts for transforming source data into accounting entries. Implements Layers 1-5: types, ontology/validation, pure logic, Neo4j persistence, and MCP server. The MCP server supports both STDIO (local) and Streamable HTTP (remote) transport.
 
 ## Branch
 
@@ -48,9 +48,18 @@ pytest tests/persistence/test_operations.py
 
 # Activate virtualenv
 source .venv/bin/activate
+
+# Run MCP server locally (STDIO, default)
+python -m mcp_server
+
+# Run MCP server with HTTP transport
+MCP_TRANSPORT=streamable-http MCP_PORT=8000 python -m mcp_server
+
+# Run with bearer token auth
+MCP_TRANSPORT=streamable-http MCP_AUTH_TOKEN=my-secret python -m mcp_server
 ```
 
-Python 3.12, no build step, no linter configured. Dependencies beyond stdlib: pytest, neo4j>=5.0, mcp[cli].
+Python 3.12, no build step, no linter configured. Dependencies beyond stdlib: pytest, neo4j>=5.0, mcp[cli], python-dotenv, uvicorn. See `requirements.txt`.
 
 ## File Map
 
@@ -88,10 +97,13 @@ tests/
     __init__.py            # Empty package marker
     test_builders.py       # Layer 5 builder tests (pure, no Neo4j)
     test_summarizers.py    # Layer 5 summarizer tests (pure, no Neo4j)
+    test_transport.py      # Layer 5 transport selection tests (mocked)
+    test_auth.py           # Layer 5 bearer token middleware tests
 mcp_server/
   CLAUDE.md            # Package docs: Layer 5 architecture & contracts
-  __init__.py          # Layer 5: FastMCP server instance, state, Neo4j connection
+  __init__.py          # Layer 5: FastMCP server instance, state, Neo4j connection, transport selection
   __main__.py          # Entry point: python -m mcp_server
+  auth.py              # Layer 5: BearerTokenMiddleware for HTTP transport
   builders.py          # Layer 5: pure functions — JSON pipeline spec → domain objects
   summarizers.py       # Layer 5: pure functions — GraphPattern → JSON-serializable dicts
   tools.py             # Layer 5: Tier 1 tool handlers (6 tools: load_recipe, load_format, get_processing_instructions, build_and_save_pipeline, build_output, validate_entries)
@@ -109,6 +121,7 @@ dogfood/
   sample_payroll_data.csv      # Sample input: 5 employees, one pay period
   payroll_journal_export.csv   # Output from run_payroll.py
   payroll_journal_output.csv   # Output from MCP-driven session
+requirements.txt             # Python dependencies for Railway deployment
 specs/
   template.md               # Spec template adapted for FP_core's 5-layer architecture
   features/                  # Feature-level specs (cross-layer)
@@ -134,7 +147,7 @@ These are test-asserted — do not change without updating both code and tests:
 | `ACCOUNT_TYPE_BALANCE_MAP` | 7 | Account type → normal balance direction |
 | `MERGE_KEYS`                       | 19  | One per NodeLabel                              |
 | MCP Tools                          | 6   | load_recipe, load_format, get_processing_instructions, build_and_save_pipeline, build_output, validate_entries |
-| Total tests                        | 394 | Across 5 domain + 2 MCP + persistence test files |
+| Total tests                        | 408 | Across 5 domain + 4 MCP + persistence test files |
 
 ## Known Constraints
 
