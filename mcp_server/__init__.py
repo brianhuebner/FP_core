@@ -27,7 +27,7 @@ logger = logging.getLogger("mcp_server")
 # Transport configuration from environment
 _transport = os.environ.get("MCP_TRANSPORT", "stdio")
 _host = os.environ.get("MCP_HOST", "0.0.0.0")
-_port = int(os.environ.get("MCP_PORT", os.environ.get("PORT", "8000")))
+_port = int(os.environ.get("MCP_PORT") or os.environ.get("PORT") or "8000")
 
 # FastMCP server instance — host/port configured for HTTP transport
 mcp = FastMCP("FP_core", host=_host, port=_port)
