@@ -1,4 +1,4 @@
-# tests/mcp_server/test_transport.py — transport selection tests
+# tests/mcp_server/test_transport.py — transport selection and OAuth wiring tests
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -98,3 +98,61 @@ class TestTransportSelection:
             importlib.reload(mcp_server)
 
             assert mcp_server._port == 3000
+
+
+class TestOAuthWiring:
+    """Verify Auth0 env vars configure OAuth on FastMCP."""
+
+    def test_auth0_env_vars_configure_oauth(self):
+        """AUTH0_DOMAIN + AUTH0_AUDIENCE → FastMCP gets token_verifier + auth."""
+        env = {
+            "MCP_TRANSPORT": "streamable-http",
+            "AUTH0_DOMAIN": "test-tenant.us.auth0.com",
+            "AUTH0_AUDIENCE": "https://fpcore.example.com/mcp",
+        }
+        with patch.dict("os.environ", env, clear=False):
+            import importlib
+            import mcp_server
+
+            importlib.reload(mcp_server)
+
+            assert mcp_server._token_verifier is not None
+            assert mcp_server._auth_settings is not None
+            assert mcp_server.mcp._token_verifier is not None
+            assert mcp_server.mcp.settings.auth is not None
+
+    def test_no_auth0_env_vars_no_oauth(self):
+        """No AUTH0 vars → FastMCP has no token_verifier."""
+        env = {"MCP_TRANSPORT": "streamable-http"}
+        with patch.dict("os.environ", env, clear=False):
+            import os
+            os.environ.pop("AUTH0_DOMAIN", None)
+            os.environ.pop("AUTH0_AUDIENCE", None)
+
+            import importlib
+            import mcp_server
+
+            importlib.reload(mcp_server)
+
+            assert mcp_server._token_verifier is None
+            assert mcp_server._auth_settings is None
+            assert mcp_server.mcp._token_verifier is None
+            assert mcp_server.mcp.settings.auth is None
+
+    def test_stdio_ignores_auth0_vars(self):
+        """STDIO transport → no auth regardless of AUTH0 vars."""
+        env = {
+            "MCP_TRANSPORT": "stdio",
+            "AUTH0_DOMAIN": "test-tenant.us.auth0.com",
+            "AUTH0_AUDIENCE": "https://fpcore.example.com/mcp",
+        }
+        with patch.dict("os.environ", env, clear=False):
+            import importlib
+            import mcp_server
+
+            importlib.reload(mcp_server)
+
+            assert mcp_server._token_verifier is None
+            assert mcp_server._auth_settings is None
+            assert mcp_server.mcp._token_verifier is None
+            assert mcp_server.mcp.settings.auth is None
