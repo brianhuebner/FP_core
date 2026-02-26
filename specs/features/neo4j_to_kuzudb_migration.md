@@ -1,8 +1,9 @@
 # Spec: Neo4j to KuzuDB Migration
 
-> **Status:** Draft
+> **Status:** Superseded
 > **Created:** 2026-02-23
 > **Spec type:** Feature
+> **Superseded by:** `specs/features/remote_mcp_server.md` (KuzuDB acquired by Apple Oct 2025; repo archived; migration path closed)
 
 ---
 
