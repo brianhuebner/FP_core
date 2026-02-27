@@ -69,11 +69,11 @@ def _require_format(format_id: str) -> GraphPattern | None:
 
 
 @mcp.tool()
-def list_available() -> str:
+def list_available(placeholder: str | None = None) -> str:
     """List all saved recipes and output formats in the knowledge graph.
 
-    No parameters required. Returns a JSON summary of all available
-    recipes and formats with identity fields and summary counts.
+    Returns a JSON summary of all available recipes and formats with
+    identity fields and summary counts. No parameters required.
 
     Use this to discover what's available before calling load_recipe
     or load_format.
