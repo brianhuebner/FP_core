@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
@@ -39,9 +39,7 @@ if _transport in ("streamable-http", "http") and _auth0_domain and _auth0_audien
     from mcp_server.auth import Auth0TokenVerifier
 
     _token_verifier = Auth0TokenVerifier(domain=_auth0_domain, audience=_auth0_audience)
-    _resource_url = os.environ.get(
-        "MCP_RESOURCE_URL", f"http://localhost:{_port}/mcp"
-    )
+    _resource_url = os.environ.get("MCP_RESOURCE_URL", f"http://localhost:{_port}/mcp")
     _auth_settings = AuthSettings(
         issuer_url=f"https://{_auth0_domain}",
         resource_server_url=_resource_url,
@@ -60,21 +58,21 @@ mcp = FastMCP(
 )
 
 # Server-side state: loaded recipe graphs keyed by recipe_id
-_loaded_recipes: Dict[str, GraphPattern] = {}
+_loaded_recipes: dict[str, GraphPattern] = {}
 
 # Server-side state: loaded format graphs keyed by format_id
-_loaded_formats: Dict[str, GraphPattern] = {}
+_loaded_formats: dict[str, GraphPattern] = {}
 
 # Lazy Neo4j connection singleton
-_connection: Optional[Neo4jConnection] = None
+_connection: Neo4jConnection | None = None
 
 
-def get_loaded_recipes() -> Dict[str, GraphPattern]:
+def get_loaded_recipes() -> dict[str, GraphPattern]:
     """Access the server-side recipe cache."""
     return _loaded_recipes
 
 
-def get_loaded_formats() -> Dict[str, GraphPattern]:
+def get_loaded_formats() -> dict[str, GraphPattern]:
     """Access the server-side format cache."""
     return _loaded_formats
 
@@ -84,6 +82,7 @@ def get_connection():
     global _connection
     if _connection is None:
         from persistence.connection import Neo4jConnection
+
         _connection = Neo4jConnection(
             uri=os.environ.get("NEO4J_URI"),
             user=os.environ.get("NEO4J_USER", "neo4j"),
@@ -94,9 +93,9 @@ def get_connection():
 
 
 # Register tool, resource, and prompt handlers by importing their modules
-import mcp_server.tools  # noqa: E402, F401
-import mcp_server.resources  # noqa: E402, F401
 import mcp_server.prompts  # noqa: E402, F401
+import mcp_server.resources  # noqa: E402, F401
+import mcp_server.tools  # noqa: E402, F401
 
 
 def main():

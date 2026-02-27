@@ -1,8 +1,5 @@
 # tests/persistence/test_operations.py — Integration tests (skipped without NEO4J_URI)
-import os
 import uuid
-
-import pytest
 
 from domain.types import (
     GraphPattern,
@@ -15,10 +12,10 @@ from domain.types import (
 # Import skip marker from conftest
 from tests.persistence.conftest import requires_neo4j
 
-
 # ============================================================================
 # Helpers — unique recipe_id per test to avoid collisions
 # ============================================================================
+
 
 def _unique_recipe_id() -> str:
     return f"test-{uuid.uuid4().hex[:8]}"
@@ -60,10 +57,11 @@ def _test_pattern(recipe_id: str) -> GraphPattern:
 # Integration tests
 # ============================================================================
 
+
 @requires_neo4j
 class TestSavePattern:
     def test_save_creates_nodes_and_relationships(self, neo4j_conn):
-        from persistence.operations import save_pattern, delete_pattern_by_recipe
+        from persistence.operations import delete_pattern_by_recipe, save_pattern
 
         recipe_id = _unique_recipe_id()
         pattern = _test_pattern(recipe_id)
@@ -83,7 +81,9 @@ class TestSavePattern:
 class TestLoadPattern:
     def test_save_then_load_round_trip(self, neo4j_conn):
         from persistence.operations import (
-            save_pattern, load_pattern_by_recipe, delete_pattern_by_recipe,
+            delete_pattern_by_recipe,
+            load_pattern_by_recipe,
+            save_pattern,
         )
 
         recipe_id = _unique_recipe_id()
@@ -108,7 +108,9 @@ class TestLoadPattern:
 class TestDeletePattern:
     def test_delete_removes_all(self, neo4j_conn):
         from persistence.operations import (
-            save_pattern, delete_pattern_by_recipe, verify_pattern,
+            delete_pattern_by_recipe,
+            save_pattern,
+            verify_pattern,
         )
 
         recipe_id = _unique_recipe_id()
@@ -126,7 +128,9 @@ class TestDeletePattern:
 class TestIdempotentSave:
     def test_save_twice_no_duplicates(self, neo4j_conn):
         from persistence.operations import (
-            save_pattern, verify_pattern, delete_pattern_by_recipe,
+            delete_pattern_by_recipe,
+            save_pattern,
+            verify_pattern,
         )
 
         recipe_id = _unique_recipe_id()
@@ -148,7 +152,9 @@ class TestIdempotentSave:
 class TestVerifyPattern:
     def test_verify_returns_counts(self, neo4j_conn):
         from persistence.operations import (
-            save_pattern, verify_pattern, delete_pattern_by_recipe,
+            delete_pattern_by_recipe,
+            save_pattern,
+            verify_pattern,
         )
 
         recipe_id = _unique_recipe_id()

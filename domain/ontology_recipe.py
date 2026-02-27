@@ -1,12 +1,5 @@
 # domain/ontology_recipe.py — Recipe Ontology Schema, Constraints & Validators
-from typing import Dict, FrozenSet, Tuple
 
-from domain.types import (
-    GraphPattern,
-    Node,
-    NodeLabel,
-    RelationshipType,
-)
 from domain.ontology import (
     ONTOLOGY,
     RELATIONSHIP_CONSTRAINTS,
@@ -16,56 +9,35 @@ from domain.ontology import (
     ValidationResult,
     _gather_constraints,
 )
-
+from domain.types import (
+    GraphPattern,
+    Node,
+    NodeLabel,
+    RelationshipType,
+)
 
 # ============================================================================
 # RECIPE RELATIONSHIP CONSTRAINTS
 # ============================================================================
 
 # 14 entries — excludes only SYNCED_BY equivalent gaps (none remaining)
-RECIPE_RELATIONSHIP_CONSTRAINTS: Dict[
-    RelationshipType, Tuple[Tuple[NodeLabel, NodeLabel], ...]
-] = {
+RECIPE_RELATIONSHIP_CONSTRAINTS: dict[RelationshipType, tuple[tuple[NodeLabel, NodeLabel], ...]] = {
     RelationshipType.HAS_COLUMN: (
         (NodeLabel.SOURCE_SCHEMA, NodeLabel.COLUMN),
         (NodeLabel.OUTPUT_FORMAT, NodeLabel.OUTPUT_COLUMN),
     ),
-    RelationshipType.HAS_MEASURE: (
-        (NodeLabel.SOURCE_SCHEMA, NodeLabel.MEASURE),
-    ),
-    RelationshipType.AGGREGATES: (
-        (NodeLabel.MEASURE, NodeLabel.COLUMN),
-    ),
-    RelationshipType.WHEN: (
-        (NodeLabel.MAPPING_RULE, NodeLabel.CONDITION),
-    ),
-    RelationshipType.SPLIT_BY: (
-        (NodeLabel.MAPPING_RULE, NodeLabel.COLUMN),
-    ),
-    RelationshipType.TRANSFORMS: (
-        (NodeLabel.ACCOUNTING_RECIPE, NodeLabel.SOURCE_SCHEMA),
-    ),
-    RelationshipType.HAS_SLOT: (
-        (NodeLabel.MAPPING_RULE, NodeLabel.ACCOUNT_SLOT),
-    ),
-    RelationshipType.HAS_RULE: (
-        (NodeLabel.ACCOUNTING_RECIPE, NodeLabel.MAPPING_RULE),
-    ),
-    RelationshipType.MAPPED_TO: (
-        (NodeLabel.ACCOUNT_SLOT, NodeLabel.ACCOUNT),
-    ),
-    RelationshipType.DEBITS: (
-        (NodeLabel.MAPPING_RULE, NodeLabel.ACCOUNT_SLOT),
-    ),
-    RelationshipType.CREDITS: (
-        (NodeLabel.MAPPING_RULE, NodeLabel.ACCOUNT_SLOT),
-    ),
-    RelationshipType.HAS_VALIDATION: (
-        (NodeLabel.OUTPUT_FORMAT, NodeLabel.VALIDATION_RULE),
-    ),
-    RelationshipType.HAS_ENTRY_STRUCTURE: (
-        (NodeLabel.OUTPUT_FORMAT, NodeLabel.ENTRY_STRUCTURE),
-    ),
+    RelationshipType.HAS_MEASURE: ((NodeLabel.SOURCE_SCHEMA, NodeLabel.MEASURE),),
+    RelationshipType.AGGREGATES: ((NodeLabel.MEASURE, NodeLabel.COLUMN),),
+    RelationshipType.WHEN: ((NodeLabel.MAPPING_RULE, NodeLabel.CONDITION),),
+    RelationshipType.SPLIT_BY: ((NodeLabel.MAPPING_RULE, NodeLabel.COLUMN),),
+    RelationshipType.TRANSFORMS: ((NodeLabel.ACCOUNTING_RECIPE, NodeLabel.SOURCE_SCHEMA),),
+    RelationshipType.HAS_SLOT: ((NodeLabel.MAPPING_RULE, NodeLabel.ACCOUNT_SLOT),),
+    RelationshipType.HAS_RULE: ((NodeLabel.ACCOUNTING_RECIPE, NodeLabel.MAPPING_RULE),),
+    RelationshipType.MAPPED_TO: ((NodeLabel.ACCOUNT_SLOT, NodeLabel.ACCOUNT),),
+    RelationshipType.DEBITS: ((NodeLabel.MAPPING_RULE, NodeLabel.ACCOUNT_SLOT),),
+    RelationshipType.CREDITS: ((NodeLabel.MAPPING_RULE, NodeLabel.ACCOUNT_SLOT),),
+    RelationshipType.HAS_VALIDATION: ((NodeLabel.OUTPUT_FORMAT, NodeLabel.VALIDATION_RULE),),
+    RelationshipType.HAS_ENTRY_STRUCTURE: ((NodeLabel.OUTPUT_FORMAT, NodeLabel.ENTRY_STRUCTURE),),
     RelationshipType.USES_REFERENCE: (
         (NodeLabel.MAPPING_RULE, NodeLabel.REFERENCE),
         (NodeLabel.CONDITION, NodeLabel.REFERENCE),
@@ -144,10 +116,16 @@ _ACCOUNT_SLOT_PROPS = PropertySchema(
 
 _MAPPING_RULE_PROPS = PropertySchema(
     required=frozenset({"recipe_id", "rule_name", "source_measure"}),
-    optional=frozenset({
-        "condition_operator", "condition_value", "memo_template",
-        "priority", "split_by", "sign_treatment",
-    }),
+    optional=frozenset(
+        {
+            "condition_operator",
+            "condition_value",
+            "memo_template",
+            "priority",
+            "split_by",
+            "sign_treatment",
+        }
+    ),
     types={
         "recipe_id": str,
         "rule_name": str,
@@ -163,9 +141,14 @@ _MAPPING_RULE_PROPS = PropertySchema(
 
 _ACCOUNTING_RECIPE_PROPS = PropertySchema(
     required=frozenset({"recipe_id", "name", "source_schema"}),
-    optional=frozenset({
-        "batch_key", "journal_no_format", "entries_per_file", "visibility",
-    }),
+    optional=frozenset(
+        {
+            "batch_key",
+            "journal_no_format",
+            "entries_per_file",
+            "visibility",
+        }
+    ),
     types={
         "recipe_id": str,
         "name": str,
@@ -222,10 +205,16 @@ _REFERENCE_PROPS = PropertySchema(
 
 _OUTPUT_COLUMN_PROPS = PropertySchema(
     required=frozenset({"format_id", "name", "position", "data_type"}),
-    optional=frozenset({
-        "required", "description", "source_mapping",
-        "sign_convention", "format_pattern", "exclude_from_output",
-    }),
+    optional=frozenset(
+        {
+            "required",
+            "description",
+            "source_mapping",
+            "sign_convention",
+            "format_pattern",
+            "exclude_from_output",
+        }
+    ),
     types={
         "format_id": str,
         "name": str,
@@ -245,10 +234,11 @@ _OUTPUT_COLUMN_PROPS = PropertySchema(
 # RECIPE ONTOLOGY — Entity schemas for 12 recipe/pipeline node types
 # ============================================================================
 
+
 def _outgoing_recipe(
     label: NodeLabel,
-    constraints: Dict[RelationshipType, Tuple[Tuple[NodeLabel, NodeLabel], ...]] | None = None,
-) -> Tuple[RelationshipConstraint, ...]:
+    constraints: dict[RelationshipType, tuple[tuple[NodeLabel, NodeLabel], ...]] | None = None,
+) -> tuple[RelationshipConstraint, ...]:
     if constraints is None:
         constraints = RECIPE_RELATIONSHIP_CONSTRAINTS
     return _gather_constraints(label, constraints, "source")
@@ -256,14 +246,14 @@ def _outgoing_recipe(
 
 def _incoming_recipe(
     label: NodeLabel,
-    constraints: Dict[RelationshipType, Tuple[Tuple[NodeLabel, NodeLabel], ...]] | None = None,
-) -> Tuple[RelationshipConstraint, ...]:
+    constraints: dict[RelationshipType, tuple[tuple[NodeLabel, NodeLabel], ...]] | None = None,
+) -> tuple[RelationshipConstraint, ...]:
     if constraints is None:
         constraints = RECIPE_RELATIONSHIP_CONSTRAINTS
     return _gather_constraints(label, constraints, "target")
 
 
-_RECIPE_PROPS_MAP: Dict[NodeLabel, PropertySchema] = {
+_RECIPE_PROPS_MAP: dict[NodeLabel, PropertySchema] = {
     NodeLabel.SOURCE_SCHEMA: _SOURCE_SCHEMA_PROPS,
     NodeLabel.COLUMN: _COLUMN_PROPS,
     NodeLabel.MEASURE: _MEASURE_PROPS,
@@ -278,7 +268,7 @@ _RECIPE_PROPS_MAP: Dict[NodeLabel, PropertySchema] = {
     NodeLabel.REFERENCE: _REFERENCE_PROPS,
 }
 
-RECIPE_ONTOLOGY: Dict[NodeLabel, EntitySchema] = {
+RECIPE_ONTOLOGY: dict[NodeLabel, EntitySchema] = {
     label: EntitySchema(
         label=label,
         properties=props,
@@ -294,22 +284,23 @@ RECIPE_ONTOLOGY: Dict[NodeLabel, EntitySchema] = {
 # ============================================================================
 
 # Which accounting labels may be the source of a USES_REFERENCE edge
-REFERENCE_RELATIONSHIP_SOURCES: FrozenSet[NodeLabel] = frozenset({
-    NodeLabel.MAPPING_RULE,
-    NodeLabel.CONDITION,
-    NodeLabel.ACCOUNTING_RECIPE,
-})
+REFERENCE_RELATIONSHIP_SOURCES: frozenset[NodeLabel] = frozenset(
+    {
+        NodeLabel.MAPPING_RULE,
+        NodeLabel.CONDITION,
+        NodeLabel.ACCOUNTING_RECIPE,
+    }
+)
 
 
 # ============================================================================
 # MERGED ONTOLOGY — Combines core + recipe constraints
 # ============================================================================
 
-def merged_relationship_constraints() -> Dict[
-    RelationshipType, Tuple[Tuple[NodeLabel, NodeLabel], ...]
-]:
+
+def merged_relationship_constraints() -> dict[RelationshipType, tuple[tuple[NodeLabel, NodeLabel], ...]]:
     """Combine core and recipe relationship constraints into one dict."""
-    combined: Dict[RelationshipType, list[Tuple[NodeLabel, NodeLabel]]] = {}
+    combined: dict[RelationshipType, list[tuple[NodeLabel, NodeLabel]]] = {}
     for rel_type, pairs in RELATIONSHIP_CONSTRAINTS.items():
         combined.setdefault(rel_type, []).extend(pairs)
     for rel_type, pairs in RECIPE_RELATIONSHIP_CONSTRAINTS.items():
@@ -319,19 +310,19 @@ def merged_relationship_constraints() -> Dict[
 
 def _outgoing_merged(
     label: NodeLabel,
-    constraints: Dict[RelationshipType, Tuple[Tuple[NodeLabel, NodeLabel], ...]],
-) -> Tuple[RelationshipConstraint, ...]:
+    constraints: dict[RelationshipType, tuple[tuple[NodeLabel, NodeLabel], ...]],
+) -> tuple[RelationshipConstraint, ...]:
     return _gather_constraints(label, constraints, "source")
 
 
 def _incoming_merged(
     label: NodeLabel,
-    constraints: Dict[RelationshipType, Tuple[Tuple[NodeLabel, NodeLabel], ...]],
-) -> Tuple[RelationshipConstraint, ...]:
+    constraints: dict[RelationshipType, tuple[tuple[NodeLabel, NodeLabel], ...]],
+) -> tuple[RelationshipConstraint, ...]:
     return _gather_constraints(label, constraints, "target")
 
 
-def merged_ontology() -> Dict[NodeLabel, EntitySchema]:
+def merged_ontology() -> dict[NodeLabel, EntitySchema]:
     """Rebuild all 16 EntitySchema entries using combined constraints.
 
     Cannot be a naive {**ONTOLOGY, **RECIPE_ONTOLOGY} because cross-layer
@@ -341,7 +332,7 @@ def merged_ontology() -> Dict[NodeLabel, EntitySchema]:
     combined_constraints = merged_relationship_constraints()
 
     # Collect all properties from both ontologies
-    all_props: Dict[NodeLabel, PropertySchema] = {}
+    all_props: dict[NodeLabel, PropertySchema] = {}
     for label, schema in ONTOLOGY.items():
         all_props[label] = schema.properties
     for label, schema in RECIPE_ONTOLOGY.items():
@@ -362,73 +353,51 @@ def merged_ontology() -> Dict[NodeLabel, EntitySchema]:
 # RECIPE VALIDATION FUNCTIONS — All pure, all return ValidationResult
 # ============================================================================
 
+
 def validate_recipe_has_schema(pattern: GraphPattern) -> ValidationResult:
     """AccountingRecipe must have TRANSFORMS relationship to a SourceSchema."""
-    recipe_ids = {
-        n.id for n in pattern.nodes
-        if NodeLabel.ACCOUNTING_RECIPE in n.labels
-    }
+    recipe_ids = {n.id for n in pattern.nodes if NodeLabel.ACCOUNTING_RECIPE in n.labels}
     if not recipe_ids:
         return ValidationResult.success()
 
-    transforms_sources = {
-        rel.start_node_id
-        for rel in pattern.relationships
-        if rel.type == RelationshipType.TRANSFORMS
-    }
+    transforms_sources = {rel.start_node_id for rel in pattern.relationships if rel.type == RelationshipType.TRANSFORMS}
 
     missing = recipe_ids - transforms_sources
     if missing:
-        return ValidationResult.failure(tuple(
-            f"AccountingRecipe '{rid}' has no TRANSFORMS relationship to a SourceSchema"
-            for rid in sorted(missing)
-        ))
+        return ValidationResult.failure(
+            tuple(
+                f"AccountingRecipe '{rid}' has no TRANSFORMS relationship to a SourceSchema" for rid in sorted(missing)
+            )
+        )
     return ValidationResult.success()
 
 
 def validate_slot_has_mapping(pattern: GraphPattern) -> ValidationResult:
     """AccountSlot should have MAPPED_TO to an Account (soft warning)."""
-    slot_ids = {
-        n.id for n in pattern.nodes
-        if NodeLabel.ACCOUNT_SLOT in n.labels
-    }
+    slot_ids = {n.id for n in pattern.nodes if NodeLabel.ACCOUNT_SLOT in n.labels}
     if not slot_ids:
         return ValidationResult.success()
 
-    mapped_sources = {
-        rel.start_node_id
-        for rel in pattern.relationships
-        if rel.type == RelationshipType.MAPPED_TO
-    }
+    mapped_sources = {rel.start_node_id for rel in pattern.relationships if rel.type == RelationshipType.MAPPED_TO}
 
     unmapped = slot_ids - mapped_sources
     if unmapped:
-        return ValidationResult.success(warnings=tuple(
-            f"AccountSlot '{sid}' has no MAPPED_TO relationship to an Account"
-            for sid in sorted(unmapped)
-        ))
+        return ValidationResult.success(
+            warnings=tuple(
+                f"AccountSlot '{sid}' has no MAPPED_TO relationship to an Account" for sid in sorted(unmapped)
+            )
+        )
     return ValidationResult.success()
 
 
 def validate_mapping_rule_completeness(pattern: GraphPattern) -> ValidationResult:
     """MappingRule must have both DEBITS and CREDITS edges."""
-    rule_ids = {
-        n.id for n in pattern.nodes
-        if NodeLabel.MAPPING_RULE in n.labels
-    }
+    rule_ids = {n.id for n in pattern.nodes if NodeLabel.MAPPING_RULE in n.labels}
     if not rule_ids:
         return ValidationResult.success()
 
-    debit_sources = {
-        rel.start_node_id
-        for rel in pattern.relationships
-        if rel.type == RelationshipType.DEBITS
-    }
-    credit_sources = {
-        rel.start_node_id
-        for rel in pattern.relationships
-        if rel.type == RelationshipType.CREDITS
-    }
+    debit_sources = {rel.start_node_id for rel in pattern.relationships if rel.type == RelationshipType.DEBITS}
+    credit_sources = {rel.start_node_id for rel in pattern.relationships if rel.type == RelationshipType.CREDITS}
 
     errors: list[str] = []
     for rid in sorted(rule_ids):
@@ -438,9 +407,7 @@ def validate_mapping_rule_completeness(pattern: GraphPattern) -> ValidationResul
         if rid not in credit_sources:
             missing.append("CREDITS")
         if missing:
-            errors.append(
-                f"MappingRule '{rid}' is missing {', '.join(missing)} edge(s)"
-            )
+            errors.append(f"MappingRule '{rid}' is missing {', '.join(missing)} edge(s)")
 
     if errors:
         return ValidationResult.failure(tuple(errors))
@@ -449,49 +416,33 @@ def validate_mapping_rule_completeness(pattern: GraphPattern) -> ValidationResul
 
 def validate_measure_references_column(pattern: GraphPattern) -> ValidationResult:
     """Measure must have AGGREGATES to a Column."""
-    measure_ids = {
-        n.id for n in pattern.nodes
-        if NodeLabel.MEASURE in n.labels
-    }
+    measure_ids = {n.id for n in pattern.nodes if NodeLabel.MEASURE in n.labels}
     if not measure_ids:
         return ValidationResult.success()
 
-    aggregates_sources = {
-        rel.start_node_id
-        for rel in pattern.relationships
-        if rel.type == RelationshipType.AGGREGATES
-    }
+    aggregates_sources = {rel.start_node_id for rel in pattern.relationships if rel.type == RelationshipType.AGGREGATES}
 
     missing = measure_ids - aggregates_sources
     if missing:
-        return ValidationResult.failure(tuple(
-            f"Measure '{mid}' has no AGGREGATES relationship to a Column"
-            for mid in sorted(missing)
-        ))
+        return ValidationResult.failure(
+            tuple(f"Measure '{mid}' has no AGGREGATES relationship to a Column" for mid in sorted(missing))
+        )
     return ValidationResult.success()
 
 
 def validate_output_format_has_columns(pattern: GraphPattern) -> ValidationResult:
     """OutputFormat must have at least one HAS_COLUMN relationship to an OutputColumn."""
-    format_ids = {
-        n.id for n in pattern.nodes
-        if NodeLabel.OUTPUT_FORMAT in n.labels
-    }
+    format_ids = {n.id for n in pattern.nodes if NodeLabel.OUTPUT_FORMAT in n.labels}
     if not format_ids:
         return ValidationResult.success()
 
-    has_column_sources = {
-        rel.start_node_id
-        for rel in pattern.relationships
-        if rel.type == RelationshipType.HAS_COLUMN
-    }
+    has_column_sources = {rel.start_node_id for rel in pattern.relationships if rel.type == RelationshipType.HAS_COLUMN}
 
     missing = format_ids - has_column_sources
     if missing:
-        return ValidationResult.failure(tuple(
-            f"OutputFormat '{fid}' has no HAS_COLUMN relationship to an OutputColumn"
-            for fid in sorted(missing)
-        ))
+        return ValidationResult.failure(
+            tuple(f"OutputFormat '{fid}' has no HAS_COLUMN relationship to an OutputColumn" for fid in sorted(missing))
+        )
     return ValidationResult.success()
 
 
@@ -506,18 +457,12 @@ def _get_output_columns_for_format(
         for rel in pattern.relationships
         if rel.type == RelationshipType.HAS_COLUMN and rel.start_node_id == format_node_id
     }
-    return [
-        node_map[cid] for cid in column_ids
-        if cid in node_map and NodeLabel.OUTPUT_COLUMN in node_map[cid].labels
-    ]
+    return [node_map[cid] for cid in column_ids if cid in node_map and NodeLabel.OUTPUT_COLUMN in node_map[cid].labels]
 
 
 def validate_output_column_positions_unique(pattern: GraphPattern) -> ValidationResult:
     """Within each OutputFormat's connected OutputColumns, all position values must be unique."""
-    format_ids = {
-        n.id for n in pattern.nodes
-        if NodeLabel.OUTPUT_FORMAT in n.labels
-    }
+    format_ids = {n.id for n in pattern.nodes if NodeLabel.OUTPUT_FORMAT in n.labels}
     if not format_ids:
         return ValidationResult.success()
 
@@ -530,9 +475,7 @@ def validate_output_column_positions_unique(pattern: GraphPattern) -> Validation
         duplicates = {p for p in positions if positions.count(p) > 1}
         if duplicates:
             dup_str = ", ".join(str(d) for d in sorted(duplicates))
-            errors.append(
-                f"OutputFormat '{fid}' has duplicate OutputColumn positions: {dup_str}"
-            )
+            errors.append(f"OutputFormat '{fid}' has duplicate OutputColumn positions: {dup_str}")
 
     if errors:
         return ValidationResult.failure(tuple(errors))
@@ -541,10 +484,7 @@ def validate_output_column_positions_unique(pattern: GraphPattern) -> Validation
 
 def validate_entry_structure_references_column(pattern: GraphPattern) -> ValidationResult:
     """EntryStructure's grouping_column/date_column should match a connected OutputColumn name (soft warning)."""
-    entry_ids = {
-        n.id for n in pattern.nodes
-        if NodeLabel.ENTRY_STRUCTURE in n.labels
-    }
+    entry_ids = {n.id for n in pattern.nodes if NodeLabel.ENTRY_STRUCTURE in n.labels}
     if not entry_ids:
         return ValidationResult.success()
 
@@ -571,10 +511,7 @@ def validate_entry_structure_references_column(pattern: GraphPattern) -> Validat
         for field in ("grouping_column", "date_column"):
             value = entry_node.properties.get(field)
             if value and value not in column_names:
-                warnings.append(
-                    f"EntryStructure '{eid}' {field} '{value}' "
-                    f"does not match any OutputColumn name"
-                )
+                warnings.append(f"EntryStructure '{eid}' {field} '{value}' does not match any OutputColumn name")
 
     if warnings:
         return ValidationResult.success(warnings=tuple(warnings))
@@ -583,10 +520,7 @@ def validate_entry_structure_references_column(pattern: GraphPattern) -> Validat
 
 def validate_uses_reference(pattern: GraphPattern) -> ValidationResult:
     """Validates only the accounting (source) side of USES_REFERENCE; target is opaque."""
-    uses_ref_rels = [
-        rel for rel in pattern.relationships
-        if rel.type == RelationshipType.USES_REFERENCE
-    ]
+    uses_ref_rels = [rel for rel in pattern.relationships if rel.type == RelationshipType.USES_REFERENCE]
     if not uses_ref_rels:
         return ValidationResult.success()
 
@@ -596,9 +530,7 @@ def validate_uses_reference(pattern: GraphPattern) -> ValidationResult:
     for rel in uses_ref_rels:
         source = node_map.get(rel.start_node_id)
         if source is None:
-            errors.append(
-                f"USES_REFERENCE relationship '{rel.id}' has unknown source node '{rel.start_node_id}'"
-            )
+            errors.append(f"USES_REFERENCE relationship '{rel.id}' has unknown source node '{rel.start_node_id}'")
             continue
         source_labels = source.labels & {l for l in REFERENCE_RELATIONSHIP_SOURCES}
         if not source_labels:

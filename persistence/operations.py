@@ -1,8 +1,6 @@
 # persistence/operations.py — High-level save/load/delete operations
 from __future__ import annotations
 
-from typing import Any, Dict, List
-
 from domain.types import GraphPattern
 from persistence.connection import Neo4jConnection
 from persistence.deserializers import deserialize_pattern
@@ -12,14 +10,14 @@ from persistence.serializers import NODE_ID_KEY, serialize_pattern
 def save_pattern(
     conn: Neo4jConnection,
     pattern: GraphPattern,
-) -> List[Dict[str, int]]:
+) -> list[dict[str, int]]:
     """Serialize a GraphPattern and write all statements to Neo4j.
 
     Returns a list of counter dicts (one per statement).
     No pre-validation — caller decides when to validate.
     """
     statements = serialize_pattern(pattern)
-    results: List[Dict[str, int]] = []
+    results: list[dict[str, int]] = []
     for cypher, params in statements:
         result = conn.run_write(cypher, params)
         results.append(result)
@@ -64,7 +62,7 @@ def load_pattern_by_recipe(
            properties(r) AS properties
     """
     # Collect hop node IDs for relationship query
-    hop_ids: List[str] = []
+    hop_ids: list[str] = []
     for record in hop_records:
         node_id = record.get("properties", {}).get(NODE_ID_KEY)
         if node_id:
@@ -108,7 +106,7 @@ def _delete_by_property(
     conn: Neo4jConnection,
     id_property: str,
     id_value: str,
-) -> Dict[str, int]:
+) -> dict[str, int]:
     """Delete all nodes (and their relationships) matching a property."""
     query = f"""
     MATCH (n)
@@ -121,7 +119,7 @@ def _delete_by_property(
 def delete_pattern_by_recipe(
     conn: Neo4jConnection,
     recipe_id: str,
-) -> Dict[str, int]:
+) -> dict[str, int]:
     """Delete all nodes (and their relationships) for a recipe."""
     return _delete_by_property(conn, "recipe_id", recipe_id)
 
@@ -129,7 +127,7 @@ def delete_pattern_by_recipe(
 def delete_format_by_id(
     conn: Neo4jConnection,
     format_id: str,
-) -> Dict[str, int]:
+) -> dict[str, int]:
     """Delete all nodes (and their relationships) for an output format."""
     return _delete_by_property(conn, "format_id", format_id)
 
@@ -138,7 +136,7 @@ def _verify_by_property(
     conn: Neo4jConnection,
     id_property: str,
     id_value: str,
-) -> Dict[str, int]:
+) -> dict[str, int]:
     """Count nodes and relationships matching a property (diagnostic)."""
     node_query = f"""
     MATCH (n)
@@ -162,7 +160,7 @@ def _verify_by_property(
 def verify_pattern(
     conn: Neo4jConnection,
     recipe_id: str,
-) -> Dict[str, int]:
+) -> dict[str, int]:
     """Count nodes and relationships for a recipe (diagnostic)."""
     return _verify_by_property(conn, "recipe_id", recipe_id)
 
@@ -170,6 +168,6 @@ def verify_pattern(
 def verify_format(
     conn: Neo4jConnection,
     format_id: str,
-) -> Dict[str, int]:
+) -> dict[str, int]:
     """Count nodes and relationships for an output format (diagnostic)."""
     return _verify_by_property(conn, "format_id", format_id)

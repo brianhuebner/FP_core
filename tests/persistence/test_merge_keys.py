@@ -1,17 +1,14 @@
 # tests/persistence/test_merge_keys.py — Verify MERGE key registry
-import pytest
 
-from domain.types import NodeLabel
 from domain.ontology_recipe import merged_ontology
+from domain.types import NodeLabel
 from persistence.merge_keys import MERGE_KEYS, validate_merge_keys
 
 
 class TestMergeKeysCompleteness:
     def test_every_node_label_has_entry(self):
         for label in NodeLabel:
-            assert label in MERGE_KEYS, (
-                f"NodeLabel.{label.name} missing from MERGE_KEYS"
-            )
+            assert label in MERGE_KEYS, f"NodeLabel.{label.name} missing from MERGE_KEYS"
 
     def test_count_matches_node_labels(self):
         assert len(MERGE_KEYS) == len(NodeLabel)
@@ -30,10 +27,7 @@ class TestMergeKeysAreRequiredProperties:
             schema = ontology[label]
             required = schema.properties.required
             for key in keys:
-                assert key in required, (
-                    f"MERGE_KEYS[{label.name}] key '{key}' "
-                    f"not in required: {sorted(required)}"
-                )
+                assert key in required, f"MERGE_KEYS[{label.name}] key '{key}' not in required: {sorted(required)}"
 
 
 class TestReferenceNodeKeys:

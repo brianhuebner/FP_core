@@ -1,7 +1,7 @@
 # persistence/deserializers.py — Pure functions: Neo4j records -> domain objects
 from __future__ import annotations
 
-from typing import Any, Dict, List, Set
+from typing import Any
 
 from domain.types import (
     GraphPattern,
@@ -15,19 +15,15 @@ NODE_ID_KEY = "_node_id"
 
 
 # Pre-compute reverse lookup: label value string -> NodeLabel enum
-_LABEL_VALUE_MAP: Dict[str, NodeLabel] = {
-    label.value: label for label in NodeLabel
-}
+_LABEL_VALUE_MAP: dict[str, NodeLabel] = {label.value: label for label in NodeLabel}
 
 # Pre-compute reverse lookup: rel type string -> RelationshipType enum
-_REL_TYPE_MAP: Dict[str, RelationshipType] = {
-    rt.value: rt for rt in RelationshipType
-}
+_REL_TYPE_MAP: dict[str, RelationshipType] = {rt.value: rt for rt in RelationshipType}
 
 
 def deserialize_node(
-    labels: List[str],
-    properties: Dict[str, Any],
+    labels: list[str],
+    properties: dict[str, Any],
 ) -> Node:
     """Convert Neo4j node labels + properties to a domain Node.
 
@@ -38,7 +34,7 @@ def deserialize_node(
     props = dict(properties)  # defensive copy: pop(_node_id) below would mutate caller's dict
     node_id = str(props.pop(NODE_ID_KEY, ""))
 
-    node_labels: Set[NodeLabel] = set()
+    node_labels: set[NodeLabel] = set()
     extra_labels: set[str] = set()
 
     for label_str in labels:
@@ -60,7 +56,7 @@ def deserialize_relationship(
     rel_type: str,
     start_id: str,
     end_id: str,
-    properties: Dict[str, Any] | None = None,
+    properties: dict[str, Any] | None = None,
 ) -> Relationship:
     """Convert Neo4j relationship data to a domain Relationship.
 
@@ -82,8 +78,8 @@ def deserialize_relationship(
 
 
 def deserialize_pattern(
-    node_records: List[Dict[str, Any]],
-    rel_records: List[Dict[str, Any]],
+    node_records: list[dict[str, Any]],
+    rel_records: list[dict[str, Any]],
 ) -> GraphPattern:
     """Assemble a GraphPattern from lists of node and relationship records.
 
@@ -98,7 +94,7 @@ def deserialize_pattern(
     unknown types (not in RelationshipType enum).
     """
     seen_ids: set[str] = set()
-    nodes: List[Node] = []
+    nodes: list[Node] = []
 
     for record in node_records:
         node = deserialize_node(
@@ -109,7 +105,7 @@ def deserialize_pattern(
             seen_ids.add(node.id)
             nodes.append(node)
 
-    relationships: List[Relationship] = []
+    relationships: list[Relationship] = []
     seen_rel_ids: set[str] = set()
 
     for record in rel_records:

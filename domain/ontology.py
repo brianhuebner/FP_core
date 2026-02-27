@@ -1,10 +1,11 @@
 # domain/ontology.py — Accounting Ontology Schema, Constraints & Validators
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Callable, Dict, FrozenSet, Tuple
+from typing import Any
 
 from domain.types import (
     AccountType,
@@ -18,23 +19,23 @@ from domain.types import (
     TransactionLine,
 )
 
-
 # ============================================================================
 # SCHEMA DEFINITION TYPES
 # ============================================================================
 
+
 @dataclass(frozen=True)
 class PropertySchema:
-    required: FrozenSet[str]
-    optional: FrozenSet[str]
-    types: Dict[str, type]
+    required: frozenset[str]
+    optional: frozenset[str]
+    types: dict[str, type]
 
 
 @dataclass(frozen=True)
 class RelationshipConstraint:
     relationship_type: RelationshipType
-    source_labels: FrozenSet[NodeLabel]
-    target_labels: FrozenSet[NodeLabel]
+    source_labels: frozenset[NodeLabel]
+    target_labels: frozenset[NodeLabel]
     properties: PropertySchema
 
 
@@ -42,26 +43,27 @@ class RelationshipConstraint:
 class EntitySchema:
     label: NodeLabel
     properties: PropertySchema
-    outgoing_relationships: Tuple[RelationshipConstraint, ...]
-    incoming_relationships: Tuple[RelationshipConstraint, ...]
+    outgoing_relationships: tuple[RelationshipConstraint, ...]
+    incoming_relationships: tuple[RelationshipConstraint, ...]
 
 
 # ============================================================================
 # VALIDATION RESULT
 # ============================================================================
 
+
 @dataclass(frozen=True)
 class ValidationResult:
     is_valid: bool
-    errors: Tuple[str, ...]
-    warnings: Tuple[str, ...]
+    errors: tuple[str, ...]
+    warnings: tuple[str, ...]
 
     @staticmethod
-    def success(warnings: Tuple[str, ...] = ()) -> ValidationResult:
+    def success(warnings: tuple[str, ...] = ()) -> ValidationResult:
         return ValidationResult(is_valid=True, errors=(), warnings=warnings)
 
     @staticmethod
-    def failure(errors: Tuple[str, ...], warnings: Tuple[str, ...] = ()) -> ValidationResult:
+    def failure(errors: tuple[str, ...], warnings: tuple[str, ...] = ()) -> ValidationResult:
         return ValidationResult(is_valid=False, errors=errors, warnings=warnings)
 
     @staticmethod
@@ -82,7 +84,7 @@ class ValidationResult:
 # CONSTRAINT DATA CONSTANTS
 # ============================================================================
 
-ACCOUNT_TYPE_BALANCE_MAP: Dict[AccountType, BalanceDirection] = {
+ACCOUNT_TYPE_BALANCE_MAP: dict[AccountType, BalanceDirection] = {
     AccountType.ASSET: BalanceDirection.DEBIT,
     AccountType.EXPENSE: BalanceDirection.DEBIT,
     AccountType.CONTRA_REVENUE: BalanceDirection.DEBIT,
@@ -93,16 +95,10 @@ ACCOUNT_TYPE_BALANCE_MAP: Dict[AccountType, BalanceDirection] = {
 }
 
 # Maps RelationshipType -> list of (source_label, target_label) pairs
-RELATIONSHIP_CONSTRAINTS: Dict[RelationshipType, Tuple[Tuple[NodeLabel, NodeLabel], ...]] = {
-    RelationshipType.BELONGS_TO: (
-        (NodeLabel.TRANSACTION_LINE, NodeLabel.TRANSACTION),
-    ),
-    RelationshipType.POSTS_TO: (
-        (NodeLabel.TRANSACTION_LINE, NodeLabel.ACCOUNT),
-    ),
-    RelationshipType.OWNS: (
-        (NodeLabel.ENTITY, NodeLabel.ACCOUNT),
-    ),
+RELATIONSHIP_CONSTRAINTS: dict[RelationshipType, tuple[tuple[NodeLabel, NodeLabel], ...]] = {
+    RelationshipType.BELONGS_TO: ((NodeLabel.TRANSACTION_LINE, NodeLabel.TRANSACTION),),
+    RelationshipType.POSTS_TO: ((NodeLabel.TRANSACTION_LINE, NodeLabel.ACCOUNT),),
+    RelationshipType.OWNS: ((NodeLabel.ENTITY, NodeLabel.ACCOUNT),),
     RelationshipType.PARENT_OF: (
         (NodeLabel.ENTITY, NodeLabel.ENTITY),
         (NodeLabel.ANALYTICAL_DIMENSION, NodeLabel.ANALYTICAL_DIMENSION),
@@ -111,24 +107,12 @@ RELATIONSHIP_CONSTRAINTS: Dict[RelationshipType, Tuple[Tuple[NodeLabel, NodeLabe
         (NodeLabel.ENTITY, NodeLabel.ENTITY),
         (NodeLabel.ANALYTICAL_DIMENSION, NodeLabel.ANALYTICAL_DIMENSION),
     ),
-    RelationshipType.ALLOCATED_BY: (
-        (NodeLabel.TRANSACTION_LINE, NodeLabel.ALLOCATION_RULE),
-    ),
-    RelationshipType.DIMENSIONED_BY: (
-        (NodeLabel.TRANSACTION_LINE, NodeLabel.ANALYTICAL_DIMENSION),
-    ),
-    RelationshipType.CREATED_FROM: (
-        (NodeLabel.TRANSACTION, NodeLabel.DATA_SOURCE),
-    ),
-    RelationshipType.USES_DIMENSION: (
-        (NodeLabel.ALLOCATION_RULE, NodeLabel.ANALYTICAL_DIMENSION),
-    ),
-    RelationshipType.APPLIED_TO: (
-        (NodeLabel.ALLOCATION_RULE, NodeLabel.ACCOUNT),
-    ),
-    RelationshipType.PROVIDES: (
-        (NodeLabel.DATA_SOURCE, NodeLabel.TRANSACTION),
-    ),
+    RelationshipType.ALLOCATED_BY: ((NodeLabel.TRANSACTION_LINE, NodeLabel.ALLOCATION_RULE),),
+    RelationshipType.DIMENSIONED_BY: ((NodeLabel.TRANSACTION_LINE, NodeLabel.ANALYTICAL_DIMENSION),),
+    RelationshipType.CREATED_FROM: ((NodeLabel.TRANSACTION, NodeLabel.DATA_SOURCE),),
+    RelationshipType.USES_DIMENSION: ((NodeLabel.ALLOCATION_RULE, NodeLabel.ANALYTICAL_DIMENSION),),
+    RelationshipType.APPLIED_TO: ((NodeLabel.ALLOCATION_RULE, NodeLabel.ACCOUNT),),
+    RelationshipType.PROVIDES: ((NodeLabel.DATA_SOURCE, NodeLabel.TRANSACTION),),
 }
 
 # ============================================================================
@@ -150,11 +134,19 @@ _ACCOUNT_PROPS = PropertySchema(
 )
 
 _TRANSACTION_PROPS = PropertySchema(
-    required=frozenset({
-        "transaction_id", "transaction_date", "posting_date",
-        "period", "description", "is_posted", "created_by",
-        "created_at", "source_system_id",
-    }),
+    required=frozenset(
+        {
+            "transaction_id",
+            "transaction_date",
+            "posting_date",
+            "period",
+            "description",
+            "is_posted",
+            "created_by",
+            "created_at",
+            "source_system_id",
+        }
+    ),
     optional=frozenset(),
     types={
         "transaction_id": str,
@@ -207,10 +199,17 @@ _DIMENSION_PROPS = PropertySchema(
 )
 
 _ALLOCATION_RULE_PROPS = PropertySchema(
-    required=frozenset({
-        "rule_id", "rule_name", "rule_type",
-        "is_active", "created_by", "created_at", "version",
-    }),
+    required=frozenset(
+        {
+            "rule_id",
+            "rule_name",
+            "rule_type",
+            "is_active",
+            "created_by",
+            "created_at",
+            "version",
+        }
+    ),
     optional=frozenset(),
     types={
         "rule_id": str,
@@ -237,9 +236,9 @@ _DATA_SOURCE_PROPS = PropertySchema(
 
 def _gather_constraints(
     label: NodeLabel,
-    constraints: Dict[RelationshipType, Tuple[Tuple[NodeLabel, NodeLabel], ...]],
+    constraints: dict[RelationshipType, tuple[tuple[NodeLabel, NodeLabel], ...]],
     direction: str,
-) -> Tuple[RelationshipConstraint, ...]:
+) -> tuple[RelationshipConstraint, ...]:
     """Gather RelationshipConstraints where label appears on the given side.
 
     direction='source' gathers outgoing constraints (label is source).
@@ -250,37 +249,45 @@ def _gather_constraints(
         if direction == "source":
             matched = frozenset(t for s, t in pairs if s == label)
             if matched:
-                result.append(RelationshipConstraint(
-                    relationship_type=rel_type,
-                    source_labels=frozenset({label}),
-                    target_labels=matched,
-                    properties=PropertySchema(
-                        required=frozenset(), optional=frozenset(), types={},
-                    ),
-                ))
+                result.append(
+                    RelationshipConstraint(
+                        relationship_type=rel_type,
+                        source_labels=frozenset({label}),
+                        target_labels=matched,
+                        properties=PropertySchema(
+                            required=frozenset(),
+                            optional=frozenset(),
+                            types={},
+                        ),
+                    )
+                )
         else:
             matched = frozenset(s for s, t in pairs if t == label)
             if matched:
-                result.append(RelationshipConstraint(
-                    relationship_type=rel_type,
-                    source_labels=matched,
-                    target_labels=frozenset({label}),
-                    properties=PropertySchema(
-                        required=frozenset(), optional=frozenset(), types={},
-                    ),
-                ))
+                result.append(
+                    RelationshipConstraint(
+                        relationship_type=rel_type,
+                        source_labels=matched,
+                        target_labels=frozenset({label}),
+                        properties=PropertySchema(
+                            required=frozenset(),
+                            optional=frozenset(),
+                            types={},
+                        ),
+                    )
+                )
     return tuple(result)
 
 
-def _outgoing(label: NodeLabel) -> Tuple[RelationshipConstraint, ...]:
+def _outgoing(label: NodeLabel) -> tuple[RelationshipConstraint, ...]:
     return _gather_constraints(label, RELATIONSHIP_CONSTRAINTS, "source")
 
 
-def _incoming(label: NodeLabel) -> Tuple[RelationshipConstraint, ...]:
+def _incoming(label: NodeLabel) -> tuple[RelationshipConstraint, ...]:
     return _gather_constraints(label, RELATIONSHIP_CONSTRAINTS, "target")
 
 
-ONTOLOGY: Dict[NodeLabel, EntitySchema] = {
+ONTOLOGY: dict[NodeLabel, EntitySchema] = {
     NodeLabel.ACCOUNT: EntitySchema(
         label=NodeLabel.ACCOUNT,
         properties=_ACCOUNT_PROPS,
@@ -332,9 +339,10 @@ ONTOLOGY: Dict[NodeLabel, EntitySchema] = {
 
 # --- Hard blocks (errors) ---
 
+
 def validate_node_properties(
     node: Node,
-    ontology: Dict[NodeLabel, EntitySchema] = ONTOLOGY,
+    ontology: dict[NodeLabel, EntitySchema] = ONTOLOGY,
 ) -> ValidationResult:
     errors: list[str] = []
     warnings: list[str] = []
@@ -348,19 +356,14 @@ def validate_node_properties(
         props = schema.properties
         for req in props.required:
             if req not in node.properties:
-                errors.append(
-                    f"[{label.value}] Missing required property: {req}"
-                )
+                errors.append(f"[{label.value}] Missing required property: {req}")
 
         for key, value in node.properties.items():
             if key not in props.required and key not in props.optional:
-                warnings.append(
-                    f"[{label.value}] Unknown property: {key}"
-                )
+                warnings.append(f"[{label.value}] Unknown property: {key}")
             elif key in props.types and not isinstance(value, props.types[key]):
                 errors.append(
-                    f"[{label.value}] Property '{key}' expected "
-                    f"{props.types[key].__name__}, got {type(value).__name__}"
+                    f"[{label.value}] Property '{key}' expected {props.types[key].__name__}, got {type(value).__name__}"
                 )
 
     if errors:
@@ -374,14 +377,11 @@ def validate_account_balance_direction(
 ) -> ValidationResult:
     expected = ACCOUNT_TYPE_BALANCE_MAP.get(account_type)
     if expected is None:
-        return ValidationResult.failure(
-            (f"Unknown account type: {account_type.value}",)
-        )
+        return ValidationResult.failure((f"Unknown account type: {account_type.value}",))
     if normal_balance != expected:
-        return ValidationResult.failure((
-            f"Account type {account_type.value} requires "
-            f"normal_balance={expected.value}, got {normal_balance.value}",
-        ))
+        return ValidationResult.failure(
+            (f"Account type {account_type.value} requires normal_balance={expected.value}, got {normal_balance.value}",)
+        )
     return ValidationResult.success()
 
 
@@ -389,13 +389,11 @@ def validate_relationship(
     rel: Relationship,
     source: Node,
     target: Node,
-    ontology: Dict[NodeLabel, EntitySchema] = ONTOLOGY,
+    ontology: dict[NodeLabel, EntitySchema] = ONTOLOGY,
 ) -> ValidationResult:
     allowed_pairs = RELATIONSHIP_CONSTRAINTS.get(rel.type)
     if allowed_pairs is None:
-        return ValidationResult.failure(
-            (f"Unknown relationship type: {rel.type.value}",)
-        )
+        return ValidationResult.failure((f"Unknown relationship type: {rel.type.value}",))
 
     for source_label in source.labels:
         for target_label in target.labels:
@@ -404,31 +402,34 @@ def validate_relationship(
 
     source_labels = ", ".join(l.value for l in source.labels)
     target_labels = ", ".join(l.value for l in target.labels)
-    return ValidationResult.failure((
-        f"Relationship {rel.type.value} not allowed between "
-        f"[{source_labels}] and [{target_labels}]",
-    ))
+    return ValidationResult.failure(
+        (f"Relationship {rel.type.value} not allowed between [{source_labels}] and [{target_labels}]",)
+    )
 
 
 def validate_graph_pattern(
     pattern: GraphPattern,
-    ontology: Dict[NodeLabel, EntitySchema] = ONTOLOGY,
+    ontology: dict[NodeLabel, EntitySchema] = ONTOLOGY,
 ) -> ValidationResult:
     results: list[ValidationResult] = []
 
     for node in pattern.nodes:
         results.append(validate_node_properties(node, ontology))
 
-    node_map: Dict[str, Node] = {n.id: n for n in pattern.nodes}
+    node_map: dict[str, Node] = {n.id: n for n in pattern.nodes}
     for rel in pattern.relationships:
         source = node_map.get(rel.start_node_id)
         target = node_map.get(rel.end_node_id)
         if source is None or target is None:
-            results.append(ValidationResult.failure((
-                f"Relationship {rel.type.value} references "
-                f"unknown node(s): start={rel.start_node_id}, "
-                f"end={rel.end_node_id}",
-            )))
+            results.append(
+                ValidationResult.failure(
+                    (
+                        f"Relationship {rel.type.value} references "
+                        f"unknown node(s): start={rel.start_node_id}, "
+                        f"end={rel.end_node_id}",
+                    )
+                )
+            )
         else:
             results.append(validate_relationship(rel, source, target, ontology))
 
@@ -436,7 +437,7 @@ def validate_graph_pattern(
 
 
 def validate_transaction_balance(
-    transaction_lines: Tuple[TransactionLine, ...],
+    transaction_lines: tuple[TransactionLine, ...],
 ) -> ValidationResult:
     debit_sum = Decimal("0")
     credit_sum = Decimal("0")
@@ -447,31 +448,25 @@ def validate_transaction_balance(
             credit_sum += line.amount
 
     if debit_sum != credit_sum:
-        return ValidationResult.failure((
-            f"Transaction is unbalanced: debits={debit_sum}, "
-            f"credits={credit_sum}",
-        ))
+        return ValidationResult.failure((f"Transaction is unbalanced: debits={debit_sum}, credits={credit_sum}",))
     return ValidationResult.success()
 
 
 def validate_posting_allowed(is_active: bool) -> ValidationResult:
     if not is_active:
-        return ValidationResult.failure(
-            ("Cannot post to inactive account",)
-        )
+        return ValidationResult.failure(("Cannot post to inactive account",))
     return ValidationResult.success()
 
 
 # --- Soft warnings ---
+
 
 def validate_clearing_account_balance(
     semantic_type: str | None,
     balance: Decimal,
 ) -> ValidationResult:
     if semantic_type == SemanticType.CLEARING.value and balance != Decimal("0"):
-        return ValidationResult.success(warnings=(
-            f"Clearing account has non-zero balance: {balance}",
-        ))
+        return ValidationResult.success(warnings=(f"Clearing account has non-zero balance: {balance}",))
     return ValidationResult.success()
 
 
@@ -480,10 +475,9 @@ def validate_temporal_ordering(
     posting_date: datetime,
 ) -> ValidationResult:
     if posting_date < transaction_date:
-        return ValidationResult.success(warnings=(
-            f"posting_date ({posting_date}) is before "
-            f"transaction_date ({transaction_date})",
-        ))
+        return ValidationResult.success(
+            warnings=(f"posting_date ({posting_date}) is before transaction_date ({transaction_date})",)
+        )
     return ValidationResult.success()
 
 
@@ -492,13 +486,12 @@ def validate_dimension_hierarchy(
     is_hierarchical: bool,
 ) -> ValidationResult:
     if parent_id is not None and not is_hierarchical:
-        return ValidationResult.success(warnings=(
-            "parent_id is set but is_hierarchical is False",
-        ))
+        return ValidationResult.success(warnings=("parent_id is set but is_hierarchical is False",))
     return ValidationResult.success()
 
 
 # --- Composition ---
+
 
 def compose_validators(
     *validators: Callable[..., ValidationResult],
@@ -506,4 +499,5 @@ def compose_validators(
     def composed(*args: Any, **kwargs: Any) -> ValidationResult:
         results = tuple(v(*args, **kwargs) for v in validators)
         return ValidationResult.merge(*results)
+
     return composed

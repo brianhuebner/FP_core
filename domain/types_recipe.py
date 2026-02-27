@@ -1,14 +1,13 @@
 # domain/types_recipe.py — Recipe / Pipeline Domain Types
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Tuple
 
 from domain.types import SourceType
-
 
 # ============================================================================
 # RECIPE ENUMS
 # ============================================================================
+
 
 class ColumnDataType(Enum):
     STRING = "string"
@@ -54,13 +53,14 @@ class TransformOp(Enum):
 # RECIPE NODE DATACLASSES — All frozen/immutable
 # ============================================================================
 
+
 @dataclass(frozen=True)
 class SourceSchema:
     recipe_id: str
     name: str
     source_system: SourceType
-    file_pattern: Optional[str] = None
-    row_grain: Optional[str] = None
+    file_pattern: str | None = None
+    row_grain: str | None = None
 
 
 @dataclass(frozen=True)
@@ -71,7 +71,7 @@ class Column:
     data_type: ColumnDataType
     role: SemanticRole
     required: bool = True
-    description: Optional[str] = None
+    description: str | None = None
 
 
 @dataclass(frozen=True)
@@ -79,10 +79,10 @@ class Measure:
     recipe_id: str
     name: str
     operation: AggregationOp
-    group_by: Tuple[str, ...] = ()
-    split_by: Optional[str] = None
-    split_column: Optional[str] = None
-    description: Optional[str] = None
+    group_by: tuple[str, ...] = ()
+    split_by: str | None = None
+    split_column: str | None = None
+    description: str | None = None
 
 
 @dataclass(frozen=True)
@@ -91,7 +91,7 @@ class Condition:
     condition_id: str
     column: str
     operator: ConditionOp
-    value: Optional[str] = None
+    value: str | None = None
 
 
 @dataclass(frozen=True)
@@ -100,7 +100,7 @@ class AccountSlot:
     slot_id: str
     role: str
     entry_type: str
-    description: Optional[str] = None
+    description: str | None = None
 
 
 @dataclass(frozen=True)
@@ -109,11 +109,11 @@ class MappingRule:
     rule_name: str
     source_measure: str
     condition_operator: ConditionOp = ConditionOp.ALWAYS
-    condition_value: Optional[str] = None
-    memo_template: Optional[str] = None
+    condition_value: str | None = None
+    memo_template: str | None = None
     priority: int = 0
-    split_by: Optional[str] = None
-    sign_treatment: Optional[str] = None
+    split_by: str | None = None
+    sign_treatment: str | None = None
 
 
 @dataclass(frozen=True)
@@ -121,9 +121,9 @@ class AccountingRecipe:
     recipe_id: str
     name: str
     source_schema: str
-    batch_key: Optional[str] = None
-    journal_no_format: Optional[str] = None
-    entries_per_file: Optional[int] = None
+    batch_key: str | None = None
+    journal_no_format: str | None = None
+    entries_per_file: int | None = None
     visibility: str = "private"
 
 
@@ -133,7 +133,7 @@ class OutputFormat:
     name: str
     target_system: str
     file_format: str
-    version: Optional[str] = None
+    version: str | None = None
 
 
 @dataclass(frozen=True)
@@ -143,10 +143,10 @@ class OutputColumn:
     position: int
     data_type: ColumnDataType
     required: bool = True
-    description: Optional[str] = None
-    source_mapping: Optional[str] = None
-    sign_convention: Optional[str] = None
-    format_pattern: Optional[str] = None
+    description: str | None = None
+    source_mapping: str | None = None
+    sign_convention: str | None = None
+    format_pattern: str | None = None
     exclude_from_output: bool = False
 
 
@@ -156,7 +156,7 @@ class ValidationRule:
     name: str
     expression: str
     scope: str
-    description: Optional[str] = None
+    description: str | None = None
 
 
 @dataclass(frozen=True)
@@ -165,5 +165,5 @@ class EntryStructure:
     entry_separator: str
     grouping_column: str
     date_column: str
-    validation: Optional[str] = None
-    description: Optional[str] = None
+    validation: str | None = None
+    description: str | None = None

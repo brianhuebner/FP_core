@@ -1,16 +1,11 @@
 # persistence/__init__.py — Public API for the persistence package
-from persistence.merge_keys import MERGE_KEYS, validate_merge_keys
-from persistence.serializers import (
-    serialize_node,
-    serialize_pattern,
-    serialize_relationship,
-)
+from persistence.connection import Neo4jConnection
 from persistence.deserializers import (
     deserialize_node,
     deserialize_pattern,
     deserialize_relationship,
 )
-from persistence.connection import Neo4jConnection
+from persistence.merge_keys import MERGE_KEYS, validate_merge_keys
 from persistence.operations import (
     delete_format_by_id,
     delete_pattern_by_recipe,
@@ -19,6 +14,11 @@ from persistence.operations import (
     save_pattern,
     verify_format,
     verify_pattern,
+)
+from persistence.serializers import (
+    serialize_node,
+    serialize_pattern,
+    serialize_relationship,
 )
 
 __all__ = [

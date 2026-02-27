@@ -3,12 +3,12 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Dict, FrozenSet, List, Optional, Set
-
+from typing import Any
 
 # ============================================================================
 # DOMAIN ENUMS — Maps directly to ontology enum definitions
 # ============================================================================
+
 
 class AccountType(Enum):
     ASSET = "asset"
@@ -69,6 +69,7 @@ class SourceType(Enum):
 # GRAPH SCHEMA ENUMS — For graph-level operations (Cypher, validation)
 # ============================================================================
 
+
 class NodeLabel(Enum):
     ACCOUNT = "Account"
     TRANSACTION = "Transaction"
@@ -126,6 +127,7 @@ class RelationshipType(Enum):
 # CORE NODE DATACLASSES — 7 Phase 1 domain types (all frozen/immutable)
 # ============================================================================
 
+
 @dataclass(frozen=True)
 class Account:
     code: str
@@ -133,8 +135,8 @@ class Account:
     account_type: AccountType
     normal_balance: BalanceDirection
     is_active: bool = True
-    semantic_type: Optional[SemanticType] = None
-    expected_behavior: Optional[str] = None
+    semantic_type: SemanticType | None = None
+    expected_behavior: str | None = None
 
 
 @dataclass(frozen=True)
@@ -155,7 +157,7 @@ class TransactionLine:
     line_id: str
     amount: Decimal
     direction: BalanceDirection
-    memo: Optional[str] = None
+    memo: str | None = None
 
 
 @dataclass(frozen=True)
@@ -164,7 +166,7 @@ class Entity:
     legal_name: str
     entity_type: EntityType
     base_currency: str
-    tax_id: Optional[str] = None
+    tax_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -174,8 +176,8 @@ class AnalyticalDimension:
     name: str
     is_hierarchical: bool = False
     is_required: bool = False
-    code: Optional[str] = None
-    parent_id: Optional[str] = None
+    code: str | None = None
+    parent_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -193,20 +195,21 @@ class AllocationRule:
 class DataSource:
     source_id: str
     source_type: SourceType
-    connection_config: Dict[str, Any] = field(default_factory=dict)
-    last_sync: Optional[datetime] = None
+    connection_config: dict[str, Any] = field(default_factory=dict)
+    last_sync: datetime | None = None
 
 
 # ============================================================================
 # GRAPH INFRASTRUCTURE — Generic graph primitives for Neo4j interaction
 # ============================================================================
 
+
 @dataclass(frozen=True)
 class Node:
     id: str
-    labels: Set[NodeLabel]
-    properties: Dict[str, Any]
-    extra_labels: FrozenSet[str] = frozenset()
+    labels: set[NodeLabel]
+    properties: dict[str, Any]
+    extra_labels: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -215,26 +218,26 @@ class Relationship:
     type: RelationshipType
     start_node_id: str
     end_node_id: str
-    properties: Dict[str, Any]
+    properties: dict[str, Any]
 
 
 @dataclass(frozen=True)
 class GraphPattern:
-    nodes: List[Node]
-    relationships: List[Relationship]
+    nodes: list[Node]
+    relationships: list[Relationship]
 
 
 @dataclass(frozen=True)
 class QueryIntent:
-    entity_types: Set[NodeLabel]
-    relationship_types: Set[RelationshipType]
-    filters: Dict[str, Any]
+    entity_types: set[NodeLabel]
+    relationship_types: set[RelationshipType]
+    filters: dict[str, Any]
     depth: int
 
 
 @dataclass(frozen=True)
 class Knowledge:
-    entities: List[Node]
-    connections: List[Relationship]
-    context: Dict[str, Any]
+    entities: list[Node]
+    connections: list[Relationship]
+    context: dict[str, Any]
     confidence: float

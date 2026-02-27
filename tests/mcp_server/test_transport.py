@@ -3,8 +3,6 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
-
 
 class TestTransportSelection:
     """Verify main() selects transport based on MCP_TRANSPORT env var."""
@@ -15,6 +13,7 @@ class TestTransportSelection:
         with patch.dict("os.environ", env, clear=False):
             # Re-import to pick up env vars
             import importlib
+
             import mcp_server
 
             importlib.reload(mcp_server)
@@ -28,6 +27,7 @@ class TestTransportSelection:
         env = {"MCP_TRANSPORT": "streamable-http"}
         with patch.dict("os.environ", env, clear=False):
             import importlib
+
             import mcp_server
 
             importlib.reload(mcp_server)
@@ -41,6 +41,7 @@ class TestTransportSelection:
         env = {"MCP_TRANSPORT": "http"}
         with patch.dict("os.environ", env, clear=False):
             import importlib
+
             import mcp_server
 
             importlib.reload(mcp_server)
@@ -58,6 +59,7 @@ class TestTransportSelection:
         }
         with patch.dict("os.environ", env, clear=False):
             import importlib
+
             import mcp_server
 
             importlib.reload(mcp_server)
@@ -73,11 +75,13 @@ class TestTransportSelection:
         # Remove MCP_HOST, MCP_PORT, PORT if present
         with patch.dict("os.environ", env, clear=False):
             import os
+
             os.environ.pop("MCP_HOST", None)
             os.environ.pop("MCP_PORT", None)
             os.environ.pop("PORT", None)
 
             import importlib
+
             import mcp_server
 
             importlib.reload(mcp_server)
@@ -90,9 +94,11 @@ class TestTransportSelection:
         env = {"MCP_TRANSPORT": "streamable-http", "PORT": "3000"}
         with patch.dict("os.environ", env, clear=False):
             import os
+
             os.environ.pop("MCP_PORT", None)
 
             import importlib
+
             import mcp_server
 
             importlib.reload(mcp_server)
@@ -112,6 +118,7 @@ class TestOAuthWiring:
         }
         with patch.dict("os.environ", env, clear=False):
             import importlib
+
             import mcp_server
 
             importlib.reload(mcp_server)
@@ -126,10 +133,12 @@ class TestOAuthWiring:
         env = {"MCP_TRANSPORT": "streamable-http"}
         with patch.dict("os.environ", env, clear=False):
             import os
+
             os.environ.pop("AUTH0_DOMAIN", None)
             os.environ.pop("AUTH0_AUDIENCE", None)
 
             import importlib
+
             import mcp_server
 
             importlib.reload(mcp_server)
@@ -148,6 +157,7 @@ class TestOAuthWiring:
         }
         with patch.dict("os.environ", env, clear=False):
             import importlib
+
             import mcp_server
 
             importlib.reload(mcp_server)

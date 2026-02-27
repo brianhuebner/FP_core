@@ -1,7 +1,7 @@
 # persistence/serializers.py — Pure functions: GraphPattern -> (cypher, params) tuples
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 from domain.types import GraphPattern, Node, NodeLabel, Relationship
 from persistence.merge_keys import MERGE_KEYS
@@ -11,8 +11,8 @@ NODE_ID_KEY = "_node_id"
 
 def _resolve_merge_keys(
     node: Node,
-    merge_keys: Dict[NodeLabel, Tuple[str, ...]],
-) -> Tuple[str, ...]:
+    merge_keys: dict[NodeLabel, tuple[str, ...]],
+) -> tuple[str, ...]:
     """Look up merge key names for a node from its first matching label."""
     for label in node.labels:
         if label in merge_keys:
@@ -30,8 +30,8 @@ def _label_string(node: Node) -> str:
 def serialize_node(
     node: Node,
     index: int = 0,
-    merge_keys: Dict[NodeLabel, Tuple[str, ...]] = MERGE_KEYS,
-) -> Tuple[str, Dict[str, Any]]:
+    merge_keys: dict[NodeLabel, tuple[str, ...]] = MERGE_KEYS,
+) -> tuple[str, dict[str, Any]]:
     """Serialize a single Node to a MERGE Cypher statement with params.
 
     Returns (cypher_string, params_dict).
@@ -41,7 +41,7 @@ def serialize_node(
 
     merge_key_names = _resolve_merge_keys(node, merge_keys)
 
-    params: Dict[str, Any] = {}
+    params: dict[str, Any] = {}
 
     # For Reference nodes with no merge keys, use _node_id as the merge key
     if not merge_key_names:
@@ -56,7 +56,7 @@ def serialize_node(
         merge_props = ", ".join(merge_parts)
 
     # SET clause: _node_id + all remaining properties
-    set_parts: List[str] = []
+    set_parts: list[str] = []
 
     # Always store _node_id via SET (unless it's already in MERGE for Reference)
     if merge_key_names:
@@ -81,8 +81,8 @@ def _build_node_match(
     node: Node | None,
     node_id: str,
     var: str,
-    merge_keys: Dict[NodeLabel, Tuple[str, ...]],
-    params: Dict[str, Any],
+    merge_keys: dict[NodeLabel, tuple[str, ...]],
+    params: dict[str, Any],
 ) -> str:
     """Build a MATCH clause for a single node endpoint."""
     if node is not None:
@@ -96,10 +96,10 @@ def _build_node_match(
 def serialize_relationship(
     rel: Relationship,
     index: int = 0,
-    node_map: Dict[str, Node] | None = None,
-    node_index_map: Dict[str, int] | None = None,
-    merge_keys: Dict[NodeLabel, Tuple[str, ...]] = MERGE_KEYS,
-) -> Tuple[str, Dict[str, Any]]:
+    node_map: dict[str, Node] | None = None,
+    node_index_map: dict[str, int] | None = None,
+    merge_keys: dict[NodeLabel, tuple[str, ...]] = MERGE_KEYS,
+) -> tuple[str, dict[str, Any]]:
     """Serialize a Relationship to MATCH + MERGE Cypher.
 
     Requires node_map (id -> Node) and node_index_map (id -> index) to
@@ -110,17 +110,29 @@ def serialize_relationship(
     if node_index_map is None:
         node_index_map = {}
 
-    params: Dict[str, Any] = {}
-    lines: List[str] = []
+    params: dict[str, Any] = {}
+    lines: list[str] = []
 
     start_var = f"s{index}"
     end_var = f"e{index}"
-    lines.append(_build_node_match(
-        node_map.get(rel.start_node_id), rel.start_node_id, start_var, merge_keys, params,
-    ))
-    lines.append(_build_node_match(
-        node_map.get(rel.end_node_id), rel.end_node_id, end_var, merge_keys, params,
-    ))
+    lines.append(
+        _build_node_match(
+            node_map.get(rel.start_node_id),
+            rel.start_node_id,
+            start_var,
+            merge_keys,
+            params,
+        )
+    )
+    lines.append(
+        _build_node_match(
+            node_map.get(rel.end_node_id),
+            rel.end_node_id,
+            end_var,
+            merge_keys,
+            params,
+        )
+    )
 
     # MERGE the relationship
     rel_type = rel.type.value
@@ -133,13 +145,9 @@ def serialize_relationship(
             prop_parts.append(f"{key}: ${param_name}")
             params[param_name] = value
         props_str = " {" + ", ".join(prop_parts) + "}"
-        lines.append(
-            f"MERGE ({start_var})-[{rel_var}:{rel_type}{props_str}]->({end_var})"
-        )
+        lines.append(f"MERGE ({start_var})-[{rel_var}:{rel_type}{props_str}]->({end_var})")
     else:
-        lines.append(
-            f"MERGE ({start_var})-[{rel_var}:{rel_type}]->({end_var})"
-        )
+        lines.append(f"MERGE ({start_var})-[{rel_var}:{rel_type}]->({end_var})")
 
     return "\n".join(lines), params
 
@@ -147,8 +155,8 @@ def serialize_relationship(
 def _match_props_for_node(
     node: Node,
     var: str,
-    merge_keys: Dict[NodeLabel, Tuple[str, ...]],
-    params: Dict[str, Any],
+    merge_keys: dict[NodeLabel, tuple[str, ...]],
+    params: dict[str, Any],
 ) -> str:
     """Build the property matching string for a MATCH clause."""
     merge_key_names = _resolve_merge_keys(node, merge_keys)
@@ -169,18 +177,18 @@ def _match_props_for_node(
 
 def serialize_pattern(
     pattern: GraphPattern,
-    merge_keys: Dict[NodeLabel, Tuple[str, ...]] = MERGE_KEYS,
-) -> List[Tuple[str, Dict[str, Any]]]:
+    merge_keys: dict[NodeLabel, tuple[str, ...]] = MERGE_KEYS,
+) -> list[tuple[str, dict[str, Any]]]:
     """Serialize a full GraphPattern to a list of (cypher, params) statements.
 
     Returns node statements first, then relationship statements.
     One statement per node/relationship.
     """
-    statements: List[Tuple[str, Dict[str, Any]]] = []
+    statements: list[tuple[str, dict[str, Any]]] = []
 
     # Build node index map for relationship serialization
-    node_map: Dict[str, Node] = {}
-    node_index_map: Dict[str, int] = {}
+    node_map: dict[str, Node] = {}
+    node_index_map: dict[str, int] = {}
     for i, node in enumerate(pattern.nodes):
         node_map[node.id] = node
         node_index_map[node.id] = i
@@ -188,8 +196,14 @@ def serialize_pattern(
 
     # Serialize relationships
     for j, rel in enumerate(pattern.relationships):
-        statements.append(serialize_relationship(
-            rel, j, node_map, node_index_map, merge_keys,
-        ))
+        statements.append(
+            serialize_relationship(
+                rel,
+                j,
+                node_map,
+                node_index_map,
+                merge_keys,
+            )
+        )
 
     return statements

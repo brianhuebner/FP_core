@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from domain import NodeLabel
-from domain.logic import validate_recipe, validate_pipeline_connectivity
+from domain.logic import validate_pipeline_connectivity, validate_recipe
 from domain.ontology import ValidationResult, validate_node_properties
 from domain.ontology_recipe import merged_ontology
 from mcp_server.summarizers import summarize_processing_instructions
@@ -71,10 +71,7 @@ def validate(recipe_id: str, results_dir: str) -> dict:
     group_by_measures = [m for m in measure_nodes if m.properties.get("group_by")]
     has_group_by = len(group_by_measures) > 0
     # group_by must be stored as a comma-separated string, not a list
-    group_by_is_string = all(
-        isinstance(m.properties.get("group_by"), str)
-        for m in group_by_measures
-    )
+    group_by_is_string = all(isinstance(m.properties.get("group_by"), str) for m in group_by_measures)
 
     report["checks"]["has_group_by"] = {
         "pass": has_group_by and group_by_is_string,
@@ -117,19 +114,10 @@ def validate(recipe_id: str, results_dir: str) -> dict:
         group_by_in_output = [m for m in measures_out if "group_by" in m]
         split_by_in_output = [m for m in measures_out if "split_by" in m]
 
-        group_by_is_list = all(
-            isinstance(m.get("group_by"), list)
-            for m in group_by_in_output
-        )
-        split_by_is_string = all(
-            isinstance(m.get("split_by"), str)
-            for m in split_by_in_output
-        )
+        group_by_is_list = all(isinstance(m.get("group_by"), list) for m in group_by_in_output)
+        split_by_is_string = all(isinstance(m.get("split_by"), str) for m in split_by_in_output)
 
-        roundtrip_ok = (
-            len(group_by_in_output) > 0
-            and group_by_is_list
-        )
+        roundtrip_ok = len(group_by_in_output) > 0 and group_by_is_list
 
         roundtrip_details = {
             "measures_with_group_by_in_output": len(group_by_in_output),
@@ -167,9 +155,7 @@ def validate(recipe_id: str, results_dir: str) -> dict:
     report["scores"]["recipe_saved"] = 1.0 * 0.30
 
     # At least one measure has group_by stored as a string: 25%
-    report["scores"]["has_group_by"] = (
-        1.0 if (has_group_by and group_by_is_string) else 0.0
-    ) * 0.25
+    report["scores"]["has_group_by"] = (1.0 if (has_group_by and group_by_is_string) else 0.0) * 0.25
 
     # group_by round-trips as a list via summarize_processing_instructions: 20%
     report["scores"]["group_by_roundtrip"] = (1.0 if roundtrip_ok else 0.0) * 0.20
@@ -191,9 +177,9 @@ def _write_report(report: dict, results_path: Path):
     with open(report_path, "w") as f:
         json.dump(report, f, indent=2, default=str)
 
-    print(f"\n{'='*60}")
-    print(f"  Eval 5: Group-By / Split-By — Validation Report")
-    print(f"{'='*60}")
+    print(f"\n{'=' * 60}")
+    print("  Eval 5: Group-By / Split-By — Validation Report")
+    print(f"{'=' * 60}")
     print(f"  Recipe ID: {report['recipe_id']}")
     print()
 
@@ -212,12 +198,12 @@ def _write_report(report: dict, results_path: Path):
                     print(f"         {item}")
 
     print()
-    print(f"  Scores:")
+    print("  Scores:")
     for score_name, score_val in report["scores"].items():
         print(f"    {score_name}: {score_val:.1%}")
-    print(f"  {'─'*40}")
+    print(f"  {'─' * 40}")
     print(f"    TOTAL: {report['total_score']:.1%}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"\n  Full report: {report_path}")
 
 

@@ -46,6 +46,10 @@ pytest tests/mcp_server/test_builders.py
 # Integration tests (requires NEO4J_URI, NEO4J_PASSWORD env vars)
 pytest tests/persistence/test_operations.py
 
+# Lint and format
+ruff check .
+ruff format --check .
+
 # Activate virtualenv
 source .venv/bin/activate
 
@@ -59,7 +63,7 @@ MCP_TRANSPORT=streamable-http MCP_PORT=8000 python -m mcp_server
 MCP_TRANSPORT=streamable-http AUTH0_DOMAIN=your-tenant.us.auth0.com AUTH0_AUDIENCE=https://your-app.example.com/mcp python -m mcp_server
 ```
 
-Python 3.12, no build step, no linter configured. Dependencies beyond stdlib: pytest, neo4j>=5.0, mcp[cli], python-dotenv, uvicorn, PyJWT[crypto]. See `requirements.txt`.
+Python 3.12, no build step. Linter/formatter: ruff (configured in `pyproject.toml`). Dependencies beyond stdlib: neo4j>=5.0, mcp[cli], python-dotenv, uvicorn, PyJWT[crypto]. Dev deps: pytest, ruff. See `pyproject.toml`.
 
 ## File Map
 
@@ -115,12 +119,7 @@ docs/
   mcp_architecture.md  # MCP server architecture and design decisions
   user_flow.md         # End-to-end user flow documentation
   old/                 # Archived docs (ontology.md, outline_skill.md, etc.)
-dogfood/
-  load_payroll.py        # Builds & saves payroll recipe pipeline to Neo4j
-  run_payroll.py         # Processes payroll data through recipe graph → journal CSV
-  sample_payroll_data.csv      # Sample input: 5 employees, one pay period
-  payroll_journal_export.csv   # Output from run_payroll.py
-  payroll_journal_output.csv   # Output from MCP-driven session
+pyproject.toml               # Project metadata, dependencies, ruff + pytest config
 requirements.txt             # Python dependencies for Railway deployment
 specs/
   template.md               # Spec template adapted for FP_core's 5-layer architecture
@@ -147,7 +146,7 @@ These are test-asserted — do not change without updating both code and tests:
 | `ACCOUNT_TYPE_BALANCE_MAP` | 7 | Account type → normal balance direction |
 | `MERGE_KEYS`                       | 19  | One per NodeLabel                              |
 | MCP Tools                          | 6   | load_recipe, load_format, get_processing_instructions, build_and_save_pipeline, build_output, validate_entries |
-| Total tests                        | 408 | Across 5 domain + 4 MCP + persistence test files |
+| Total tests                        | 413 | Across 5 domain + 4 MCP + persistence test files |
 
 ## Known Constraints
 

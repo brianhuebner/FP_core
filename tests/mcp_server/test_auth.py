@@ -2,15 +2,13 @@
 from __future__ import annotations
 
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives import serialization
 
 from mcp_server.auth import Auth0TokenVerifier
-
 
 # --- Test RSA key pair (generated once per module) ---
 
@@ -47,9 +45,7 @@ def _mock_jwks_client(verifier: Auth0TokenVerifier):
     mock_signing_key = MagicMock()
     mock_signing_key.key = _public_key
     verifier._jwks_client = MagicMock()
-    verifier._jwks_client.get_signing_key_from_jwt = MagicMock(
-        return_value=mock_signing_key
-    )
+    verifier._jwks_client.get_signing_key_from_jwt = MagicMock(return_value=mock_signing_key)
 
 
 class TestAuth0TokenVerifier:
@@ -116,9 +112,7 @@ class TestAuth0TokenVerifier:
         _mock_jwks_client(verifier)
 
         # Make get_signing_key_from_jwt raise for malformed tokens
-        verifier._jwks_client.get_signing_key_from_jwt.side_effect = jwt.PyJWTError(
-            "Invalid token"
-        )
+        verifier._jwks_client.get_signing_key_from_jwt.side_effect = jwt.PyJWTError("Invalid token")
         result = await verifier.verify_token("not-a-jwt")
 
         assert result is None

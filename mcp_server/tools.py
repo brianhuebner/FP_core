@@ -5,15 +5,6 @@ import json
 import logging
 from decimal import Decimal
 
-from mcp_server import get_connection, get_loaded_formats, get_loaded_recipes, mcp
-from mcp_server.builders import build_format_from_spec, build_pipeline_from_spec
-from mcp_server.summarizers import (
-    summarize_build_result,
-    summarize_format_load,
-    summarize_processing_instructions,
-    summarize_recipe_load,
-    summarize_validation_result,
-)
 from domain.logic import (
     validate_output_format,
     validate_pipeline_connectivity,
@@ -26,8 +17,21 @@ from domain.ontology import (
     validate_transaction_balance,
 )
 from domain.ontology_recipe import merged_ontology
-from domain.types import BalanceDirection, NodeLabel, RelationshipType, TransactionLine
-from persistence.operations import load_format_by_id, load_pattern_by_recipe, save_pattern
+from domain.types import BalanceDirection, GraphPattern, NodeLabel, TransactionLine
+from mcp_server import get_connection, get_loaded_formats, get_loaded_recipes, mcp
+from mcp_server.builders import build_format_from_spec, build_pipeline_from_spec
+from mcp_server.summarizers import (
+    summarize_build_result,
+    summarize_format_load,
+    summarize_processing_instructions,
+    summarize_recipe_load,
+    summarize_validation_result,
+)
+from persistence.operations import (
+    load_format_by_id,
+    load_pattern_by_recipe,
+    save_pattern,
+)
 
 logger = logging.getLogger("mcp_server")
 
@@ -85,7 +89,9 @@ def load_recipe(recipe_id: str) -> str:
     loaded[recipe_id] = pattern
     logger.info(
         "Loaded recipe %s: %d nodes, %d relationships",
-        recipe_id, len(pattern.nodes), len(pattern.relationships),
+        recipe_id,
+        len(pattern.nodes),
+        len(pattern.relationships),
     )
 
     summary = summarize_recipe_load(pattern, recipe_id)
@@ -115,7 +121,9 @@ def load_format(format_id: str) -> str:
     loaded[format_id] = pattern
     logger.info(
         "Loaded format %s: %d nodes, %d relationships",
-        format_id, len(pattern.nodes), len(pattern.relationships),
+        format_id,
+        len(pattern.nodes),
+        len(pattern.relationships),
     )
 
     summary = summarize_format_load(pattern, format_id)
@@ -180,8 +188,12 @@ def build_and_save_pipeline(pipeline_spec: str) -> str:
             "source_measure": "total_gross",
             "priority": 1,
             "memo_template": "Gross pay",
-            "debit":  {"slot_id": "salary_dr", "role": "expense",   "account_code": "6100", "account_name": "Salary Expense",  "account_type": "expense",   "normal_balance": "debit"},
-            "credit": {"slot_id": "payroll_cr", "role": "liability", "account_code": "2200", "account_name": "Payroll Payable", "account_type": "liability", "normal_balance": "credit"}
+            "debit":  {"slot_id": "salary_dr", "role": "expense",
+                       "account_code": "6100", "account_name": "Salary Expense",
+                       "account_type": "expense", "normal_balance": "debit"},
+            "credit": {"slot_id": "payroll_cr", "role": "liability",
+                       "account_code": "2200", "account_name": "Payroll Payable",
+                       "account_type": "liability", "normal_balance": "credit"}
           }
         ]
       }
@@ -275,7 +287,9 @@ def build_and_save_pipeline(pipeline_spec: str) -> str:
     loaded[recipe_id] = pattern
     logger.info(
         "Built and saved pipeline %s: %d nodes, %d relationships",
-        recipe_id, len(pattern.nodes), len(pattern.relationships),
+        recipe_id,
+        len(pattern.nodes),
+        len(pattern.relationships),
     )
 
     summary = summarize_build_result(merged, save_counts, recipe_id, pattern)
@@ -350,7 +364,9 @@ def build_output(output_spec: str) -> str:
     loaded[format_id] = pattern
     logger.info(
         "Built and saved format %s: %d nodes, %d relationships",
-        format_id, len(pattern.nodes), len(pattern.relationships),
+        format_id,
+        len(pattern.nodes),
+        len(pattern.relationships),
     )
 
     # Get the format name from the OutputFormat node
@@ -427,11 +443,13 @@ def validate_entries(entries: str, recipe_id: str | None = None) -> str:
         for line in lines:
             amount = Decimal(str(line["amount"]))
             direction = BalanceDirection.DEBIT if line["direction"] == "debit" else BalanceDirection.CREDIT
-            transaction_lines.append(TransactionLine(
-                line_id=f"entry_{idx}_{line.get('account_code', 'unknown')}",
-                amount=amount,
-                direction=direction,
-            ))
+            transaction_lines.append(
+                TransactionLine(
+                    line_id=f"entry_{idx}_{line.get('account_code', 'unknown')}",
+                    amount=amount,
+                    direction=direction,
+                )
+            )
             if direction == BalanceDirection.DEBIT:
                 debit_total += amount
             else:
@@ -440,29 +458,31 @@ def validate_entries(entries: str, recipe_id: str | None = None) -> str:
         result = validate_transaction_balance(tuple(transaction_lines))
         all_validation_results.append(result)
 
-        entries_results.append({
-            "entry_index": idx,
-            "is_valid": result.is_valid,
-            "debit_total": str(debit_total),
-            "credit_total": str(credit_total),
-        })
+        entries_results.append(
+            {
+                "entry_index": idx,
+                "is_valid": result.is_valid,
+                "debit_total": str(debit_total),
+                "credit_total": str(credit_total),
+            }
+        )
 
     # Account-level checks if recipe is loaded
     if account_map:
         referenced_codes = {
-            line.get("account_code")
-            for entry in entries_list
-            for line in entry.get("lines", [])
+            line.get("account_code") for entry in entries_list for line in entry.get("lines", [])
         } & account_map.keys()
 
         for acct_code in sorted(referenced_codes):
             acct_node = account_map[acct_code]
             is_active = acct_node.properties.get("is_active", True)
             all_validation_results.append(validate_posting_allowed(is_active))
-            account_results.append({
-                "account_code": acct_code,
-                "is_active": is_active,
-            })
+            account_results.append(
+                {
+                    "account_code": acct_code,
+                    "is_active": is_active,
+                }
+            )
 
     merged = ValidationResult.merge(*all_validation_results) if all_validation_results else ValidationResult.success()
 

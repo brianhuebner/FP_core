@@ -14,10 +14,10 @@ from persistence.deserializers import (
     deserialize_relationship,
 )
 
-
 # ============================================================================
 # deserialize_node
 # ============================================================================
+
 
 class TestDeserializeNode:
     def test_basic_node(self):
@@ -93,6 +93,7 @@ class TestDeserializeNode:
 # deserialize_relationship
 # ============================================================================
 
+
 class TestDeserializeRelationship:
     def test_basic_relationship(self):
         rel = deserialize_relationship(
@@ -147,6 +148,7 @@ class TestDeserializeRelationship:
 # ============================================================================
 # deserialize_pattern
 # ============================================================================
+
 
 class TestDeserializePattern:
     def test_basic_pattern(self):
@@ -234,6 +236,7 @@ class TestDeserializePattern:
 # ============================================================================
 # Round-trip: serialize -> deserialize fidelity
 # ============================================================================
+
 
 class TestSerializeDeserializeRoundTrip:
     def test_node_round_trip(self):

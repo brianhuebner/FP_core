@@ -1,21 +1,13 @@
 # tests/domain/test_logic.py — Tests for Layer 3 pure domain logic
-import pytest
 
-from domain.types import (
-    GraphPattern,
-    Node,
-    NodeLabel,
-    Relationship,
-    RelationshipType,
-)
 from domain.logic import (
     build_output_format_pattern,
     build_recipe_pattern,
     build_source_schema_pattern,
     compose_pipeline_pattern,
     extract_conditions_for_rule,
-    extract_entry_structure,
     extract_debit_credit_slots,
+    extract_entry_structure,
     extract_measures_for_schema,
     extract_output_columns,
     extract_validation_rules,
@@ -24,80 +16,106 @@ from domain.logic import (
     validate_recipe,
     validate_when_targets,
 )
-
+from domain.types import (
+    GraphPattern,
+    Node,
+    NodeLabel,
+    Relationship,
+    RelationshipType,
+)
 
 # ============================================================================
 # Helpers — reusable test fixtures
 # ============================================================================
 
+
 def _schema_node(node_id="schema1"):
     return Node(
-        id=node_id, labels={NodeLabel.SOURCE_SCHEMA},
+        id=node_id,
+        labels={NodeLabel.SOURCE_SCHEMA},
         properties={"recipe_id": "r1", "name": "Stripe Charges", "source_system": "stripe"},
     )
 
 
 def _column_node(node_id="col1", name="amount"):
     return Node(
-        id=node_id, labels={NodeLabel.COLUMN},
+        id=node_id,
+        labels={NodeLabel.COLUMN},
         properties={
-            "recipe_id": "r1", "name": name, "position": 0,
-            "data_type": "decimal", "role": "amount",
+            "recipe_id": "r1",
+            "name": name,
+            "position": 0,
+            "data_type": "decimal",
+            "role": "amount",
         },
     )
 
 
 def _measure_node(node_id="m1", name="total_amount"):
     return Node(
-        id=node_id, labels={NodeLabel.MEASURE},
+        id=node_id,
+        labels={NodeLabel.MEASURE},
         properties={"recipe_id": "r1", "name": name, "operation": "sum"},
     )
 
 
 def _condition_node(node_id="cond1"):
     return Node(
-        id=node_id, labels={NodeLabel.CONDITION},
+        id=node_id,
+        labels={NodeLabel.CONDITION},
         properties={
-            "recipe_id": "r1", "condition_id": "c1",
-            "column": "status", "operator": "equals", "value": "paid",
+            "recipe_id": "r1",
+            "condition_id": "c1",
+            "column": "status",
+            "operator": "equals",
+            "value": "paid",
         },
     )
 
 
 def _recipe_node(node_id="recipe1"):
     return Node(
-        id=node_id, labels={NodeLabel.ACCOUNTING_RECIPE},
+        id=node_id,
+        labels={NodeLabel.ACCOUNTING_RECIPE},
         properties={"recipe_id": "r1", "name": "Stripe Revenue", "source_schema": "stripe_charges"},
     )
 
 
 def _rule_node(node_id="rule1"):
     return Node(
-        id=node_id, labels={NodeLabel.MAPPING_RULE},
+        id=node_id,
+        labels={NodeLabel.MAPPING_RULE},
         properties={"recipe_id": "r1", "rule_name": "charge_rule", "source_measure": "total_amount"},
     )
 
 
 def _slot_node(node_id="slot1", role="receivable", entry_type="debit"):
     return Node(
-        id=node_id, labels={NodeLabel.ACCOUNT_SLOT},
+        id=node_id,
+        labels={NodeLabel.ACCOUNT_SLOT},
         properties={
-            "recipe_id": "r1", "slot_id": node_id,
-            "role": role, "entry_type": entry_type,
+            "recipe_id": "r1",
+            "slot_id": node_id,
+            "role": role,
+            "entry_type": entry_type,
         },
     )
 
 
 def _rel(rel_id, rel_type, start, end):
     return Relationship(
-        id=rel_id, type=rel_type,
-        start_node_id=start, end_node_id=end, properties={},
+        id=rel_id,
+        type=rel_type,
+        start_node_id=start,
+        end_node_id=end,
+        properties={},
     )
 
 
 # ============================================================================
 # build_source_schema_pattern
 # ============================================================================
+
 
 class TestBuildSourceSchemaPattern:
     def test_produces_valid_graph_pattern(self):
@@ -157,6 +175,7 @@ class TestBuildSourceSchemaPattern:
 # build_recipe_pattern
 # ============================================================================
 
+
 class TestBuildRecipePattern:
     def test_produces_valid_graph_pattern(self):
         recipe = _recipe_node()
@@ -210,6 +229,7 @@ class TestBuildRecipePattern:
 # validate_recipe
 # ============================================================================
 
+
 def _base_recipe_graph():
     """Build the common nodes and rels for a valid recipe graph.
 
@@ -236,11 +256,13 @@ class TestValidateRecipe:
     def test_valid_recipe_passes(self):
         nodes, rels = _base_recipe_graph()
         acct1 = Node(
-            id="acct1", labels={NodeLabel.ACCOUNT},
+            id="acct1",
+            labels={NodeLabel.ACCOUNT},
             properties={"code": "1200", "name": "AR", "account_type": "asset", "normal_balance": "debit"},
         )
         acct2 = Node(
-            id="acct2", labels={NodeLabel.ACCOUNT},
+            id="acct2",
+            labels={NodeLabel.ACCOUNT},
             properties={"code": "4000", "name": "Revenue", "account_type": "revenue", "normal_balance": "credit"},
         )
         mapped_dr = _rel("md1", RelationshipType.MAPPED_TO, "ds1", "acct1")
@@ -288,6 +310,7 @@ class TestValidateRecipe:
 # extract_measures_for_schema
 # ============================================================================
 
+
 class TestExtractMeasuresForSchema:
     def test_extracts_connected_measures(self):
         schema = _schema_node()
@@ -324,6 +347,7 @@ class TestExtractMeasuresForSchema:
 # ============================================================================
 # extract_debit_credit_slots
 # ============================================================================
+
 
 class TestExtractDebitCreditSlots:
     def test_extracts_slots_correctly(self):
@@ -378,33 +402,40 @@ class TestExtractDebitCreditSlots:
 # Helpers — output format test fixtures
 # ============================================================================
 
+
 def _format_node(node_id="fmt1"):
     return Node(
-        id=node_id, labels={NodeLabel.OUTPUT_FORMAT},
+        id=node_id,
+        labels={NodeLabel.OUTPUT_FORMAT},
         properties={"format_id": "f1", "name": "JE Export", "target_system": "sage", "file_format": "csv"},
     )
 
 
 def _output_column_node(node_id="oc1", name="date", position=0):
     return Node(
-        id=node_id, labels={NodeLabel.OUTPUT_COLUMN},
+        id=node_id,
+        labels={NodeLabel.OUTPUT_COLUMN},
         properties={"format_id": "fmt1", "name": name, "position": position, "data_type": "date"},
     )
 
 
 def _validation_rule_node(node_id="vr1", name="balance_check"):
     return Node(
-        id=node_id, labels={NodeLabel.VALIDATION_RULE},
+        id=node_id,
+        labels={NodeLabel.VALIDATION_RULE},
         properties={"format_id": "fmt1", "name": name, "expression": "sum(debit) == sum(credit)", "scope": "batch"},
     )
 
 
 def _entry_structure_node(node_id="es1"):
     return Node(
-        id=node_id, labels={NodeLabel.ENTRY_STRUCTURE},
+        id=node_id,
+        labels={NodeLabel.ENTRY_STRUCTURE},
         properties={
-            "format_id": "f1", "entry_separator": "newline",
-            "grouping_column": "entity", "date_column": "posting_date",
+            "format_id": "f1",
+            "entry_separator": "newline",
+            "grouping_column": "entity",
+            "date_column": "posting_date",
         },
     )
 
@@ -412,6 +443,7 @@ def _entry_structure_node(node_id="es1"):
 # ============================================================================
 # build_output_format_pattern
 # ============================================================================
+
 
 class TestBuildOutputFormatPattern:
     def test_produces_valid_graph_pattern(self):
@@ -485,6 +517,7 @@ class TestBuildOutputFormatPattern:
 # extract_output_columns
 # ============================================================================
 
+
 class TestExtractOutputColumns:
     def test_extracts_connected_columns(self):
         fmt = _format_node()
@@ -522,6 +555,7 @@ class TestExtractOutputColumns:
 # extract_validation_rules
 # ============================================================================
 
+
 class TestExtractValidationRules:
     def test_extracts_connected_rules(self):
         fmt = _format_node()
@@ -554,6 +588,7 @@ class TestExtractValidationRules:
 # extract_entry_structure
 # ============================================================================
 
+
 class TestExtractEntryStructure:
     def test_extracts_connected_entry_structure(self):
         fmt = _format_node()
@@ -580,6 +615,7 @@ class TestExtractEntryStructure:
 # ============================================================================
 # validate_output_format
 # ============================================================================
+
 
 class TestValidateOutputFormat:
     def test_valid_output_format_passes(self):
@@ -640,6 +676,7 @@ class TestValidateOutputFormat:
 # compose_pipeline_pattern
 # ============================================================================
 
+
 class TestComposePipelinePattern:
     def test_two_patterns(self):
         schema = _schema_node()
@@ -687,6 +724,7 @@ class TestComposePipelinePattern:
 # validate_pipeline_connectivity
 # ============================================================================
 
+
 class TestValidatePipelineConnectivity:
     def test_connected_passes(self):
         schema = _schema_node()
@@ -721,7 +759,8 @@ class TestValidatePipelineConnectivity:
         schema = _schema_node()
         recipe1 = _recipe_node("recipe1")
         recipe2 = Node(
-            id="recipe2", labels={NodeLabel.ACCOUNTING_RECIPE},
+            id="recipe2",
+            labels={NodeLabel.ACCOUNTING_RECIPE},
             properties={"recipe_id": "r2", "name": "Other", "source_schema": "other_schema"},
         )
         t1 = _rel("t1", RelationshipType.TRANSFORMS, "recipe1", "schema1")
@@ -742,6 +781,7 @@ class TestValidatePipelineConnectivity:
 # extract_conditions_for_rule
 # ============================================================================
 
+
 class TestExtractConditionsForRule:
     def test_single_when_condition(self):
         rule = _rule_node("rule1")
@@ -758,7 +798,8 @@ class TestExtractConditionsForRule:
         rule = _rule_node("rule1")
         cond1 = _condition_node("cond1")
         cond2 = Node(
-            id="cond2", labels={NodeLabel.CONDITION},
+            id="cond2",
+            labels={NodeLabel.CONDITION},
             properties={"recipe_id": "r1", "condition_id": "c2", "column": "type", "operator": "equals"},
         )
         w1 = _rel("w1", RelationshipType.WHEN, "rule1", "cond1")
@@ -782,12 +823,14 @@ class TestExtractConditionsForRule:
     def test_only_returns_for_specified_rule(self):
         rule1 = _rule_node("rule1")
         rule2 = Node(
-            id="rule2", labels={NodeLabel.MAPPING_RULE},
+            id="rule2",
+            labels={NodeLabel.MAPPING_RULE},
             properties={"recipe_id": "r1", "rule_name": "other_rule", "source_measure": "m"},
         )
         cond1 = _condition_node("cond1")
         cond2 = Node(
-            id="cond2", labels={NodeLabel.CONDITION},
+            id="cond2",
+            labels={NodeLabel.CONDITION},
             properties={"recipe_id": "r1", "condition_id": "c2", "column": "type", "operator": "equals"},
         )
         w1 = _rel("w1", RelationshipType.WHEN, "rule1", "cond1")
@@ -803,6 +846,7 @@ class TestExtractConditionsForRule:
 # ============================================================================
 # validate_when_targets
 # ============================================================================
+
 
 class TestValidateWhenTargets:
     def test_valid_when_targets(self):
