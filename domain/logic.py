@@ -1,15 +1,6 @@
 # domain/logic.py — Layer 3: Pure domain logic (no I/O)
 from __future__ import annotations
 
-from typing import List, Tuple
-
-from domain.types import (
-    GraphPattern,
-    Node,
-    NodeLabel,
-    Relationship,
-    RelationshipType,
-)
 from domain.ontology import ValidationResult
 from domain.ontology_recipe import (
     validate_entry_structure_references_column,
@@ -21,15 +12,22 @@ from domain.ontology_recipe import (
     validate_slot_has_mapping,
     validate_uses_reference,
 )
+from domain.types import (
+    GraphPattern,
+    Node,
+    NodeLabel,
+    Relationship,
+    RelationshipType,
+)
 
 
 def build_source_schema_pattern(
     schema_node: Node,
-    column_nodes: List[Node],
-    measure_nodes: List[Node],
-    column_rels: List[Relationship],
-    measure_rels: List[Relationship],
-    aggregates_rels: List[Relationship] | None = None,
+    column_nodes: list[Node],
+    measure_nodes: list[Node],
+    column_rels: list[Relationship],
+    measure_rels: list[Relationship],
+    aggregates_rels: list[Relationship] | None = None,
 ) -> GraphPattern:
     """Construct a GraphPattern for a complete source schema subgraph.
 
@@ -47,12 +45,12 @@ def build_recipe_pattern(
     recipe_node: Node,
     schema_node: Node,
     transforms_rel: Relationship,
-    rule_nodes: List[Node],
-    rule_rels: List[Relationship],
-    slot_nodes: List[Node],
-    slot_rels: List[Relationship],
-    additional_nodes: List[Node] | None = None,
-    additional_rels: List[Relationship] | None = None,
+    rule_nodes: list[Node],
+    rule_rels: list[Relationship],
+    slot_nodes: list[Node],
+    slot_rels: list[Relationship],
+    additional_nodes: list[Node] | None = None,
+    additional_rels: list[Relationship] | None = None,
 ) -> GraphPattern:
     """Construct a GraphPattern for a complete accounting recipe subgraph.
 
@@ -90,42 +88,46 @@ def _extract_connected_nodes(
     start_node_id: str,
     rel_type: RelationshipType,
     target_label: NodeLabel,
-) -> Tuple[Node, ...]:
+) -> tuple[Node, ...]:
     """Extract nodes connected from start_node_id via rel_type, filtered by target_label."""
     target_ids = {
-        rel.end_node_id
-        for rel in pattern.relationships
-        if rel.type == rel_type and rel.start_node_id == start_node_id
+        rel.end_node_id for rel in pattern.relationships if rel.type == rel_type and rel.start_node_id == start_node_id
     }
-    return tuple(
-        n for n in pattern.nodes
-        if n.id in target_ids and target_label in n.labels
-    )
+    return tuple(n for n in pattern.nodes if n.id in target_ids and target_label in n.labels)
 
 
 def extract_measures_for_schema(
     pattern: GraphPattern,
     schema_node_id: str,
-) -> Tuple[Node, ...]:
+) -> tuple[Node, ...]:
     """Extract Measure nodes connected to a SourceSchema via HAS_MEASURE."""
     return _extract_connected_nodes(
-        pattern, schema_node_id, RelationshipType.HAS_MEASURE, NodeLabel.MEASURE,
+        pattern,
+        schema_node_id,
+        RelationshipType.HAS_MEASURE,
+        NodeLabel.MEASURE,
     )
 
 
 def extract_debit_credit_slots(
     pattern: GraphPattern,
     rule_node_id: str,
-) -> Tuple[Tuple[Node, ...], Tuple[Node, ...]]:
+) -> tuple[tuple[Node, ...], tuple[Node, ...]]:
     """Extract (debit_slots, credit_slots) AccountSlot nodes for a MappingRule.
 
     Returns a tuple of (debit_slots, credit_slots).
     """
     debit_slots = _extract_connected_nodes(
-        pattern, rule_node_id, RelationshipType.DEBITS, NodeLabel.ACCOUNT_SLOT,
+        pattern,
+        rule_node_id,
+        RelationshipType.DEBITS,
+        NodeLabel.ACCOUNT_SLOT,
     )
     credit_slots = _extract_connected_nodes(
-        pattern, rule_node_id, RelationshipType.CREDITS, NodeLabel.ACCOUNT_SLOT,
+        pattern,
+        rule_node_id,
+        RelationshipType.CREDITS,
+        NodeLabel.ACCOUNT_SLOT,
     )
     return (debit_slots, credit_slots)
 
@@ -133,19 +135,22 @@ def extract_debit_credit_slots(
 def extract_conditions_for_rule(
     pattern: GraphPattern,
     rule_node_id: str,
-) -> Tuple[Node, ...]:
+) -> tuple[Node, ...]:
     """Extract Condition nodes connected to a MappingRule via WHEN."""
     return _extract_connected_nodes(
-        pattern, rule_node_id, RelationshipType.WHEN, NodeLabel.CONDITION,
+        pattern,
+        rule_node_id,
+        RelationshipType.WHEN,
+        NodeLabel.CONDITION,
     )
 
 
 def build_output_format_pattern(
     format_node: Node,
-    column_nodes: List[Node],
-    column_rels: List[Relationship],
-    validation_nodes: List[Node] | None = None,
-    validation_rels: List[Relationship] | None = None,
+    column_nodes: list[Node],
+    column_rels: list[Relationship],
+    validation_nodes: list[Node] | None = None,
+    validation_rels: list[Relationship] | None = None,
     entry_structure_node: Node | None = None,
     entry_structure_rel: Relationship | None = None,
 ) -> GraphPattern:
@@ -154,7 +159,7 @@ def build_output_format_pattern(
     Includes: format + output columns + optional validation rules + optional
     entry structure and all connecting relationships.
     """
-    nodes: List[Node] = [format_node] + column_nodes
+    nodes: list[Node] = [format_node] + column_nodes
     relationships = list(column_rels)
     if validation_nodes:
         nodes.extend(validation_nodes)
@@ -170,20 +175,26 @@ def build_output_format_pattern(
 def extract_output_columns(
     pattern: GraphPattern,
     format_node_id: str,
-) -> Tuple[Node, ...]:
+) -> tuple[Node, ...]:
     """Extract OutputColumn nodes connected to an OutputFormat via HAS_COLUMN."""
     return _extract_connected_nodes(
-        pattern, format_node_id, RelationshipType.HAS_COLUMN, NodeLabel.OUTPUT_COLUMN,
+        pattern,
+        format_node_id,
+        RelationshipType.HAS_COLUMN,
+        NodeLabel.OUTPUT_COLUMN,
     )
 
 
 def extract_validation_rules(
     pattern: GraphPattern,
     format_node_id: str,
-) -> Tuple[Node, ...]:
+) -> tuple[Node, ...]:
     """Extract ValidationRule nodes connected to an OutputFormat via HAS_VALIDATION."""
     return _extract_connected_nodes(
-        pattern, format_node_id, RelationshipType.HAS_VALIDATION, NodeLabel.VALIDATION_RULE,
+        pattern,
+        format_node_id,
+        RelationshipType.HAS_VALIDATION,
+        NodeLabel.VALIDATION_RULE,
     )
 
 
@@ -196,7 +207,10 @@ def extract_entry_structure(
     Returns a single node or None (one-to-one relationship).
     """
     nodes = _extract_connected_nodes(
-        pattern, format_node_id, RelationshipType.HAS_ENTRY_STRUCTURE, NodeLabel.ENTRY_STRUCTURE,
+        pattern,
+        format_node_id,
+        RelationshipType.HAS_ENTRY_STRUCTURE,
+        NodeLabel.ENTRY_STRUCTURE,
     )
     return nodes[0] if nodes else None
 
@@ -239,8 +253,7 @@ def validate_pipeline_connectivity(pattern: GraphPattern) -> ValidationResult:
         if rel.type == RelationshipType.TRANSFORMS:
             if rel.end_node_id not in node_ids:
                 errors.append(
-                    f"TRANSFORMS target '{rel.end_node_id}' from recipe "
-                    f"'{rel.start_node_id}' not found in pattern"
+                    f"TRANSFORMS target '{rel.end_node_id}' from recipe '{rel.start_node_id}' not found in pattern"
                 )
 
     if errors:
@@ -255,10 +268,7 @@ def validate_when_targets(pattern: GraphPattern) -> ValidationResult:
     for rel in pattern.relationships:
         if rel.type == RelationshipType.WHEN:
             if rel.end_node_id not in node_ids:
-                errors.append(
-                    f"WHEN target '{rel.end_node_id}' from rule "
-                    f"'{rel.start_node_id}' not found in pattern"
-                )
+                errors.append(f"WHEN target '{rel.end_node_id}' from rule '{rel.start_node_id}' not found in pattern")
     if errors:
         return ValidationResult.failure(tuple(errors))
     return ValidationResult.success()

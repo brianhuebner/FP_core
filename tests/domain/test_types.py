@@ -1,24 +1,20 @@
 # tests/domain/test_types.py — Smoke tests for Layer 1 domain types
-import pytest
 from datetime import datetime
 from decimal import Decimal
+
+import pytest
 
 from domain.types import (
     Account,
     AccountType,
-    AllocationRule,
     AnalyticalDimension,
     BalanceDirection,
     DataSource,
     DimensionType,
     Entity,
     EntityType,
-    GraphPattern,
-    Knowledge,
     Node,
     NodeLabel,
-    QueryIntent,
-    Relationship,
     RelationshipType,
     RuleType,
     SemanticType,
@@ -27,10 +23,10 @@ from domain.types import (
     TransactionLine,
 )
 
-
 # ============================================================================
 # Enum member counts
 # ============================================================================
+
 
 class TestEnumMemberCounts:
     def test_account_type_has_7_members(self):
@@ -65,10 +61,12 @@ class TestEnumMemberCounts:
 # Frozen dataclass checks
 # ============================================================================
 
+
 class TestFrozenDataclasses:
     def test_account_is_frozen(self):
         acct = Account(
-            code="1000", name="Cash",
+            code="1000",
+            name="Cash",
             account_type=AccountType.ASSET,
             normal_balance=BalanceDirection.DEBIT,
         )
@@ -78,10 +76,14 @@ class TestFrozenDataclasses:
     def test_transaction_is_frozen(self):
         now = datetime.now()
         txn = Transaction(
-            transaction_id="t1", transaction_date=now,
-            posting_date=now, period="2024-01",
-            description="Test", is_posted=True,
-            created_by="user", created_at=now,
+            transaction_id="t1",
+            transaction_date=now,
+            posting_date=now,
+            period="2024-01",
+            description="Test",
+            is_posted=True,
+            created_by="user",
+            created_at=now,
             source_system_id="sys1",
         )
         with pytest.raises(AttributeError):
@@ -89,7 +91,8 @@ class TestFrozenDataclasses:
 
     def test_transaction_line_is_frozen(self):
         line = TransactionLine(
-            line_id="l1", amount=Decimal("100"),
+            line_id="l1",
+            amount=Decimal("100"),
             direction=BalanceDirection.DEBIT,
         )
         with pytest.raises(AttributeError):
@@ -97,7 +100,8 @@ class TestFrozenDataclasses:
 
     def test_entity_is_frozen(self):
         ent = Entity(
-            entity_id="e1", legal_name="Acme",
+            entity_id="e1",
+            legal_name="Acme",
             entity_type=EntityType.LEGAL_ENTITY,
             base_currency="USD",
         )
@@ -123,10 +127,12 @@ class TestFrozenDataclasses:
 # Default values
 # ============================================================================
 
+
 class TestDefaults:
     def test_account_defaults(self):
         acct = Account(
-            code="1000", name="Cash",
+            code="1000",
+            name="Cash",
             account_type=AccountType.ASSET,
             normal_balance=BalanceDirection.DEBIT,
         )
@@ -136,7 +142,8 @@ class TestDefaults:
 
     def test_transaction_line_defaults(self):
         line = TransactionLine(
-            line_id="l1", amount=Decimal("100"),
+            line_id="l1",
+            amount=Decimal("100"),
             direction=BalanceDirection.DEBIT,
         )
         assert line.memo is None
@@ -154,7 +161,8 @@ class TestDefaults:
 
     def test_data_source_defaults(self):
         ds = DataSource(
-            source_id="s1", source_type=SourceType.MANUAL,
+            source_id="s1",
+            source_type=SourceType.MANUAL,
         )
         assert ds.connection_config == {}
         assert ds.last_sync is None

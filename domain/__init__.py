@@ -1,4 +1,57 @@
 # domain/__init__.py — Public API for the domain package
+# Layer 3 — Pure domain logic
+from domain.logic import (
+    build_output_format_pattern,
+    build_recipe_pattern,
+    build_source_schema_pattern,
+    compose_pipeline_pattern,
+    extract_conditions_for_rule,
+    extract_debit_credit_slots,
+    extract_entry_structure,
+    extract_measures_for_schema,
+    extract_output_columns,
+    extract_validation_rules,
+    validate_output_format,
+    validate_pipeline_connectivity,
+    validate_recipe,
+    validate_when_targets,
+)
+from domain.ontology import (
+    ACCOUNT_TYPE_BALANCE_MAP,
+    ONTOLOGY,
+    RELATIONSHIP_CONSTRAINTS,
+    EntitySchema,
+    PropertySchema,
+    RelationshipConstraint,
+    ValidationResult,
+    compose_validators,
+    validate_account_balance_direction,
+    validate_clearing_account_balance,
+    validate_dimension_hierarchy,
+    validate_graph_pattern,
+    validate_node_properties,
+    validate_posting_allowed,
+    validate_relationship,
+    validate_temporal_ordering,
+    validate_transaction_balance,
+)
+
+# Layer 2 — Recipe ontology & validation
+from domain.ontology_recipe import (
+    RECIPE_ONTOLOGY,
+    RECIPE_RELATIONSHIP_CONSTRAINTS,
+    REFERENCE_RELATIONSHIP_SOURCES,
+    merged_ontology,
+    merged_relationship_constraints,
+    validate_entry_structure_references_column,
+    validate_mapping_rule_completeness,
+    validate_measure_references_column,
+    validate_output_column_positions_unique,
+    validate_output_format_has_columns,
+    validate_recipe_has_schema,
+    validate_slot_has_mapping,
+    validate_uses_reference,
+)
 from domain.types import (
     Account,
     AccountType,
@@ -22,35 +75,17 @@ from domain.types import (
     Transaction,
     TransactionLine,
 )
-from domain.ontology import (
-    ACCOUNT_TYPE_BALANCE_MAP,
-    ONTOLOGY,
-    RELATIONSHIP_CONSTRAINTS,
-    EntitySchema,
-    PropertySchema,
-    RelationshipConstraint,
-    ValidationResult,
-    compose_validators,
-    validate_account_balance_direction,
-    validate_clearing_account_balance,
-    validate_dimension_hierarchy,
-    validate_graph_pattern,
-    validate_node_properties,
-    validate_posting_allowed,
-    validate_relationship,
-    validate_temporal_ordering,
-    validate_transaction_balance,
-)
+
 # Layer 1 — Recipe types
 from domain.types_recipe import (
     AccountingRecipe,
     AccountSlot,
     AggregationOp,
-    EntryStructure,
     Column,
     ColumnDataType,
     Condition,
     ConditionOp,
+    EntryStructure,
     MappingRule,
     Measure,
     OutputColumn,
@@ -59,39 +94,6 @@ from domain.types_recipe import (
     SourceSchema,
     TransformOp,
     ValidationRule,
-)
-# Layer 2 — Recipe ontology & validation
-from domain.ontology_recipe import (
-    RECIPE_ONTOLOGY,
-    RECIPE_RELATIONSHIP_CONSTRAINTS,
-    REFERENCE_RELATIONSHIP_SOURCES,
-    merged_ontology,
-    merged_relationship_constraints,
-    validate_entry_structure_references_column,
-    validate_mapping_rule_completeness,
-    validate_measure_references_column,
-    validate_output_column_positions_unique,
-    validate_output_format_has_columns,
-    validate_recipe_has_schema,
-    validate_slot_has_mapping,
-    validate_uses_reference,
-)
-# Layer 3 — Pure domain logic
-from domain.logic import (
-    build_output_format_pattern,
-    build_recipe_pattern,
-    build_source_schema_pattern,
-    compose_pipeline_pattern,
-    extract_conditions_for_rule,
-    extract_entry_structure,
-    extract_debit_credit_slots,
-    extract_measures_for_schema,
-    extract_output_columns,
-    extract_validation_rules,
-    validate_output_format,
-    validate_pipeline_connectivity,
-    validate_recipe,
-    validate_when_targets,
 )
 
 __all__ = [

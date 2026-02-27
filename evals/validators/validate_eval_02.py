@@ -11,17 +11,20 @@ import sys
 from decimal import Decimal
 from pathlib import Path
 
-
 # Expected values from the fixture data (payroll_5emp_jan.csv)
 EXPECTED_GROSS = Decimal("24500.00")  # 5500 + 4200 + 6800 + 3500 + 4500
-EXPECTED_TAX = Decimal("6125.00")     # 1375 + 1050 + 1700 + 875 + 1125
-EXPECTED_NET = Decimal("18375.00")    # 4125 + 3150 + 5100 + 2625 + 3375
+EXPECTED_TAX = Decimal("6125.00")  # 1375 + 1050 + 1700 + 875 + 1125
+EXPECTED_NET = Decimal("18375.00")  # 4125 + 3150 + 5100 + 2625 + 3375
 
 EXPECTED_ACCOUNTS = {"6100", "2100", "2200", "1010"}
 
 EXPECTED_COLUMNS = [
-    "journal_number", "journal_date", "account_code",
-    "debit_amount", "credit_amount", "memo",
+    "journal_number",
+    "journal_date",
+    "account_code",
+    "debit_amount",
+    "credit_amount",
+    "memo",
 ]
 
 
@@ -83,12 +86,14 @@ def validate(results_dir: str) -> dict:
     balance_details = []
     for jn, entry in entries.items():
         balanced = entry["debits"] == entry["credits"]
-        balance_details.append({
-            "journal_number": jn,
-            "debits": str(entry["debits"]),
-            "credits": str(entry["credits"]),
-            "balanced": balanced,
-        })
+        balance_details.append(
+            {
+                "journal_number": jn,
+                "debits": str(entry["debits"]),
+                "credits": str(entry["credits"]),
+                "balanced": balanced,
+            }
+        )
         if not balanced:
             all_balanced = False
 
@@ -98,12 +103,8 @@ def validate(results_dir: str) -> dict:
     }
 
     # --- Check: Correct amounts ---
-    total_debits = sum(
-        Decimal(row.get("debit_amount", "0") or "0") for row in rows
-    )
-    total_credits = sum(
-        Decimal(row.get("credit_amount", "0") or "0") for row in rows
-    )
+    total_debits = sum(Decimal(row.get("debit_amount", "0") or "0") for row in rows)
+    total_credits = sum(Decimal(row.get("credit_amount", "0") or "0") for row in rows)
 
     # Collect per-account debit and credit totals
     account_totals = {}
@@ -200,14 +201,9 @@ def validate(results_dir: str) -> dict:
     processing_instructions_used = False
     if agent_output_path.exists():
         agent_text = agent_output_path.read_text().lower()
-        gate2_invoked = (
-            "validate_entries" in agent_text
-            or "gate 2" in agent_text
-            or "gate2" in agent_text
-        )
+        gate2_invoked = "validate_entries" in agent_text or "gate 2" in agent_text or "gate2" in agent_text
         processing_instructions_used = (
-            "get_processing_instructions" in agent_text
-            or "processing instructions" in agent_text
+            "get_processing_instructions" in agent_text or "processing instructions" in agent_text
         )
 
     report["checks"]["gate2_invoked"] = {"pass": gate2_invoked}
@@ -241,9 +237,9 @@ def _write_report(report: dict, results_path: Path):
         json.dump(report, f, indent=2, default=str)
 
     # Print summary
-    print(f"\n{'='*60}")
-    print(f"  Eval 2: Process Data — Validation Report")
-    print(f"{'='*60}")
+    print(f"\n{'=' * 60}")
+    print("  Eval 2: Process Data — Validation Report")
+    print(f"{'=' * 60}")
     print()
 
     for check_name, check_data in report["checks"].items():
@@ -263,12 +259,12 @@ def _write_report(report: dict, results_path: Path):
                         print(f"         {item.get('journal_number')}: DR={item['debits']} CR={item['credits']}")
 
     print()
-    print(f"  Scores:")
+    print("  Scores:")
     for score_name, score_val in report["scores"].items():
         print(f"    {score_name}: {score_val:.1%}")
-    print(f"  {'─'*40}")
+    print(f"  {'─' * 40}")
     print(f"    TOTAL: {report['total_score']:.1%}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     print(f"\n  Full report: {report_path}")
 

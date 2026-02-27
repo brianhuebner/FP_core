@@ -4,14 +4,15 @@
 Builds domain objects from JSON pipeline specs and verifies
 correct Node/Relationship/GraphPattern construction.
 """
+
 import pytest
 
-from domain.types import GraphPattern, Node, NodeLabel, RelationshipType
 from domain.logic import (
     validate_output_format,
     validate_pipeline_connectivity,
     validate_recipe,
 )
+from domain.types import GraphPattern, NodeLabel, RelationshipType
 from mcp_server.builders import (
     _build_output_nodes,
     _build_recipe_nodes,
@@ -21,13 +22,13 @@ from mcp_server.builders import (
     build_pipeline_from_spec,
 )
 
-
 RECIPE_ID = "payroll_monthly_v1"
 
 
 # ============================================================================
 # Fixtures: reusable spec fragments
 # ============================================================================
+
 
 @pytest.fixture
 def schema_spec():
@@ -65,24 +66,66 @@ def recipe_spec():
                 "source_measure": "total_gross_pay",
                 "priority": 1,
                 "memo_template": "Salary expense - {pay_date:%B %Y}",
-                "debit": {"slot_id": "salary_expense_debit", "role": "primary", "account_code": "6100", "account_name": "Salary Expense", "account_type": "expense", "normal_balance": "debit"},
-                "credit": {"slot_id": "payroll_payable_credit_gross", "role": "offset", "account_code": "2100", "account_name": "Payroll Payable", "account_type": "liability", "normal_balance": "credit"},
+                "debit": {
+                    "slot_id": "salary_expense_debit",
+                    "role": "primary",
+                    "account_code": "6100",
+                    "account_name": "Salary Expense",
+                    "account_type": "expense",
+                    "normal_balance": "debit",
+                },
+                "credit": {
+                    "slot_id": "payroll_payable_credit_gross",
+                    "role": "offset",
+                    "account_code": "2100",
+                    "account_name": "Payroll Payable",
+                    "account_type": "liability",
+                    "normal_balance": "credit",
+                },
             },
             {
                 "rule_name": "tax_withholding_entry",
                 "source_measure": "total_tax_withheld",
                 "priority": 2,
                 "memo_template": "Tax withholding - {pay_date:%B %Y}",
-                "debit": {"slot_id": "payroll_payable_debit_tax", "role": "primary", "account_code": "2100", "account_name": "Payroll Payable", "account_type": "liability", "normal_balance": "credit"},
-                "credit": {"slot_id": "tax_payable_credit", "role": "offset", "account_code": "2200", "account_name": "Tax Payable", "account_type": "liability", "normal_balance": "credit"},
+                "debit": {
+                    "slot_id": "payroll_payable_debit_tax",
+                    "role": "primary",
+                    "account_code": "2100",
+                    "account_name": "Payroll Payable",
+                    "account_type": "liability",
+                    "normal_balance": "credit",
+                },
+                "credit": {
+                    "slot_id": "tax_payable_credit",
+                    "role": "offset",
+                    "account_code": "2200",
+                    "account_name": "Tax Payable",
+                    "account_type": "liability",
+                    "normal_balance": "credit",
+                },
             },
             {
                 "rule_name": "net_pay_entry",
                 "source_measure": "total_net_pay",
                 "priority": 3,
                 "memo_template": "Net pay disbursement - {pay_date:%B %Y}",
-                "debit": {"slot_id": "payroll_payable_debit_net", "role": "primary", "account_code": "2100", "account_name": "Payroll Payable", "account_type": "liability", "normal_balance": "credit"},
-                "credit": {"slot_id": "cash_credit", "role": "offset", "account_code": "1010", "account_name": "Cash", "account_type": "asset", "normal_balance": "debit"},
+                "debit": {
+                    "slot_id": "payroll_payable_debit_net",
+                    "role": "primary",
+                    "account_code": "2100",
+                    "account_name": "Payroll Payable",
+                    "account_type": "liability",
+                    "normal_balance": "credit",
+                },
+                "credit": {
+                    "slot_id": "cash_credit",
+                    "role": "offset",
+                    "account_code": "1010",
+                    "account_name": "Cash",
+                    "account_type": "asset",
+                    "normal_balance": "debit",
+                },
             },
         ],
     }
@@ -95,7 +138,13 @@ def output_spec():
         "target_system": "quickbooks",
         "file_format": "csv",
         "columns": [
-            {"name": "journal_number", "position": 1, "data_type": "string", "required": True, "source_mapping": "journal_no_format"},
+            {
+                "name": "journal_number",
+                "position": 1,
+                "data_type": "string",
+                "required": True,
+                "source_mapping": "journal_no_format",
+            },
             {"name": "journal_date", "position": 2, "data_type": "date", "required": True},
             {"name": "account_code", "position": 3, "data_type": "string", "required": True},
             {"name": "debit_amount", "position": 4, "data_type": "decimal", "required": True},
@@ -127,6 +176,7 @@ def full_spec(schema_spec, recipe_spec, output_spec):
 # TestGenerateNodeId
 # ============================================================================
 
+
 class TestGenerateNodeId:
     def test_basic_format(self):
         result = _generate_node_id("my_recipe", "col", "gross_pay")
@@ -146,6 +196,7 @@ class TestGenerateNodeId:
 # ============================================================================
 # TestBuildSchemaNodes
 # ============================================================================
+
 
 class TestBuildSchemaNodes:
     def test_returns_schema_node(self, schema_spec):
@@ -206,7 +257,9 @@ class TestBuildSchemaNodes:
 
     def test_measure_group_by_single_column(self):
         spec = {
-            "name": "test", "source_system": "csv_import", "columns": [],
+            "name": "test",
+            "source_system": "csv_import",
+            "columns": [],
             "measures": [{"name": "total", "operation": "sum", "group_by": ["pay_date"]}],
         }
         _, _, measures, _ = _build_schema_nodes(spec, "test_id")
@@ -214,7 +267,9 @@ class TestBuildSchemaNodes:
 
     def test_measure_group_by_multiple_columns(self):
         spec = {
-            "name": "test", "source_system": "csv_import", "columns": [],
+            "name": "test",
+            "source_system": "csv_import",
+            "columns": [],
             "measures": [{"name": "total", "operation": "sum", "group_by": ["pay_date", "location"]}],
         }
         _, _, measures, _ = _build_schema_nodes(spec, "test_id")
@@ -222,7 +277,9 @@ class TestBuildSchemaNodes:
 
     def test_measure_group_by_empty_array(self):
         spec = {
-            "name": "test", "source_system": "csv_import", "columns": [],
+            "name": "test",
+            "source_system": "csv_import",
+            "columns": [],
             "measures": [{"name": "total", "operation": "sum", "group_by": []}],
         }
         _, _, measures, _ = _build_schema_nodes(spec, "test_id")
@@ -230,7 +287,9 @@ class TestBuildSchemaNodes:
 
     def test_measure_split_by(self):
         spec = {
-            "name": "test", "source_system": "csv_import", "columns": [],
+            "name": "test",
+            "source_system": "csv_import",
+            "columns": [],
             "measures": [{"name": "total", "operation": "sum", "split_by": "department"}],
         }
         _, _, measures, _ = _build_schema_nodes(spec, "test_id")
@@ -238,7 +297,9 @@ class TestBuildSchemaNodes:
 
     def test_measure_split_column(self):
         spec = {
-            "name": "test", "source_system": "csv_import", "columns": [],
+            "name": "test",
+            "source_system": "csv_import",
+            "columns": [],
             "measures": [{"name": "total", "operation": "sum", "split_column": "department"}],
         }
         _, _, measures, _ = _build_schema_nodes(spec, "test_id")
@@ -246,13 +307,18 @@ class TestBuildSchemaNodes:
 
     def test_measure_all_aggregation_fields(self):
         spec = {
-            "name": "test", "source_system": "csv_import", "columns": [],
-            "measures": [{
-                "name": "total", "operation": "sum",
-                "group_by": ["pay_date", "location"],
-                "split_by": "department",
-                "split_column": "dept_code",
-            }],
+            "name": "test",
+            "source_system": "csv_import",
+            "columns": [],
+            "measures": [
+                {
+                    "name": "total",
+                    "operation": "sum",
+                    "group_by": ["pay_date", "location"],
+                    "split_by": "department",
+                    "split_column": "dept_code",
+                }
+            ],
         }
         _, _, measures, _ = _build_schema_nodes(spec, "test_id")
         m = measures[0]
@@ -264,6 +330,7 @@ class TestBuildSchemaNodes:
 # ============================================================================
 # TestBuildRecipeNodes
 # ============================================================================
+
 
 class TestBuildRecipeNodes:
     def test_returns_recipe_node(self, recipe_spec):
@@ -323,8 +390,22 @@ class TestBuildRecipeNodes:
                     "rule_name": "test_rule",
                     "source_measure": "total",
                     "priority": 1,
-                    "debit": {"slot_id": "dr_slot", "role": "primary", "account_code": "5000", "account_name": "Expense", "account_type": "expense", "normal_balance": "debit"},
-                    "credit": {"slot_id": "cr_slot", "role": "offset", "account_code": "2000", "account_name": "Payable", "account_type": "liability", "normal_balance": "credit"},
+                    "debit": {
+                        "slot_id": "dr_slot",
+                        "role": "primary",
+                        "account_code": "5000",
+                        "account_name": "Expense",
+                        "account_type": "expense",
+                        "normal_balance": "debit",
+                    },
+                    "credit": {
+                        "slot_id": "cr_slot",
+                        "role": "offset",
+                        "account_code": "2000",
+                        "account_name": "Payable",
+                        "account_type": "liability",
+                        "normal_balance": "credit",
+                    },
                     "uses_references": ["dept_lookup"],
                 },
             ],
@@ -383,8 +464,22 @@ class TestBuildRecipeNodes:
                     "source_measure": "total",
                     "priority": 1,
                     "when": "is_paid",
-                    "debit": {"slot_id": "dr", "role": "primary", "account_code": "5000", "account_name": "Expense", "account_type": "expense", "normal_balance": "debit"},
-                    "credit": {"slot_id": "cr", "role": "offset", "account_code": "2000", "account_name": "AP", "account_type": "liability", "normal_balance": "credit"},
+                    "debit": {
+                        "slot_id": "dr",
+                        "role": "primary",
+                        "account_code": "5000",
+                        "account_name": "Expense",
+                        "account_type": "expense",
+                        "normal_balance": "debit",
+                    },
+                    "credit": {
+                        "slot_id": "cr",
+                        "role": "offset",
+                        "account_code": "2000",
+                        "account_name": "AP",
+                        "account_type": "liability",
+                        "normal_balance": "credit",
+                    },
                 },
             ],
         }
@@ -406,8 +501,22 @@ class TestBuildRecipeNodes:
                     "source_measure": "total",
                     "priority": 1,
                     "when": "is_paid",
-                    "debit": {"slot_id": "dr", "role": "primary", "account_code": "5000", "account_name": "Expense", "account_type": "expense", "normal_balance": "debit"},
-                    "credit": {"slot_id": "cr", "role": "offset", "account_code": "2000", "account_name": "AP", "account_type": "liability", "normal_balance": "credit"},
+                    "debit": {
+                        "slot_id": "dr",
+                        "role": "primary",
+                        "account_code": "5000",
+                        "account_name": "Expense",
+                        "account_type": "expense",
+                        "normal_balance": "debit",
+                    },
+                    "credit": {
+                        "slot_id": "cr",
+                        "role": "offset",
+                        "account_code": "2000",
+                        "account_name": "AP",
+                        "account_type": "liability",
+                        "normal_balance": "credit",
+                    },
                 },
             ],
         }
@@ -428,8 +537,22 @@ class TestBuildRecipeNodes:
                     "source_measure": "total",
                     "priority": 1,
                     "when": "nonexistent_condition",
-                    "debit": {"slot_id": "dr", "role": "primary", "account_code": "5000", "account_name": "Expense", "account_type": "expense", "normal_balance": "debit"},
-                    "credit": {"slot_id": "cr", "role": "offset", "account_code": "2000", "account_name": "AP", "account_type": "liability", "normal_balance": "credit"},
+                    "debit": {
+                        "slot_id": "dr",
+                        "role": "primary",
+                        "account_code": "5000",
+                        "account_name": "Expense",
+                        "account_type": "expense",
+                        "normal_balance": "debit",
+                    },
+                    "credit": {
+                        "slot_id": "cr",
+                        "role": "offset",
+                        "account_code": "2000",
+                        "account_name": "AP",
+                        "account_type": "liability",
+                        "normal_balance": "credit",
+                    },
                 },
             ],
         }
@@ -451,16 +574,44 @@ class TestBuildRecipeNodes:
                     "source_measure": "total",
                     "priority": 1,
                     "when": "is_paid",
-                    "debit": {"slot_id": "dr_a", "role": "primary", "account_code": "5000", "account_name": "Expense", "account_type": "expense", "normal_balance": "debit"},
-                    "credit": {"slot_id": "cr_a", "role": "offset", "account_code": "2000", "account_name": "AP", "account_type": "liability", "normal_balance": "credit"},
+                    "debit": {
+                        "slot_id": "dr_a",
+                        "role": "primary",
+                        "account_code": "5000",
+                        "account_name": "Expense",
+                        "account_type": "expense",
+                        "normal_balance": "debit",
+                    },
+                    "credit": {
+                        "slot_id": "cr_a",
+                        "role": "offset",
+                        "account_code": "2000",
+                        "account_name": "AP",
+                        "account_type": "liability",
+                        "normal_balance": "credit",
+                    },
                 },
                 {
                     "rule_name": "rule_b",
                     "source_measure": "total",
                     "priority": 2,
                     "when": "is_paid",
-                    "debit": {"slot_id": "dr_b", "role": "primary", "account_code": "5001", "account_name": "Expense2", "account_type": "expense", "normal_balance": "debit"},
-                    "credit": {"slot_id": "cr_b", "role": "offset", "account_code": "2001", "account_name": "AP2", "account_type": "liability", "normal_balance": "credit"},
+                    "debit": {
+                        "slot_id": "dr_b",
+                        "role": "primary",
+                        "account_code": "5001",
+                        "account_name": "Expense2",
+                        "account_type": "expense",
+                        "normal_balance": "debit",
+                    },
+                    "credit": {
+                        "slot_id": "cr_b",
+                        "role": "offset",
+                        "account_code": "2001",
+                        "account_name": "AP2",
+                        "account_type": "liability",
+                        "normal_balance": "credit",
+                    },
                 },
             ],
         }
@@ -475,6 +626,7 @@ class TestBuildRecipeNodes:
 # ============================================================================
 # TestBuildOutputNodes
 # ============================================================================
+
 
 class TestBuildOutputNodes:
     def test_returns_format_node(self, output_spec):
@@ -533,6 +685,7 @@ class TestBuildOutputNodes:
 # TestBuildPipelineFromSpec
 # ============================================================================
 
+
 class TestBuildPipelineFromSpec:
     def test_returns_graph_pattern(self, full_spec):
         pattern = build_pipeline_from_spec(full_spec)
@@ -554,10 +707,17 @@ class TestBuildPipelineFromSpec:
         for node in pattern.nodes:
             labels_present.update(node.labels)
         expected = {
-            NodeLabel.SOURCE_SCHEMA, NodeLabel.COLUMN, NodeLabel.MEASURE,
-            NodeLabel.ACCOUNTING_RECIPE, NodeLabel.MAPPING_RULE, NodeLabel.ACCOUNT_SLOT,
-            NodeLabel.ACCOUNT, NodeLabel.OUTPUT_FORMAT, NodeLabel.OUTPUT_COLUMN,
-            NodeLabel.VALIDATION_RULE, NodeLabel.ENTRY_STRUCTURE,
+            NodeLabel.SOURCE_SCHEMA,
+            NodeLabel.COLUMN,
+            NodeLabel.MEASURE,
+            NodeLabel.ACCOUNTING_RECIPE,
+            NodeLabel.MAPPING_RULE,
+            NodeLabel.ACCOUNT_SLOT,
+            NodeLabel.ACCOUNT,
+            NodeLabel.OUTPUT_FORMAT,
+            NodeLabel.OUTPUT_COLUMN,
+            NodeLabel.VALIDATION_RULE,
+            NodeLabel.ENTRY_STRUCTURE,
         }
         assert expected.issubset(labels_present)
 
@@ -592,6 +752,7 @@ class TestBuildPipelineFromSpec:
 # TestBuildPipelineEdgeCases
 # ============================================================================
 
+
 class TestBuildPipelineEdgeCases:
     def test_minimal_spec_without_output(self):
         """Pipeline can exist without output spec."""
@@ -615,8 +776,22 @@ class TestBuildPipelineEdgeCases:
                         "rule_name": "entry",
                         "source_measure": "total_amount",
                         "priority": 1,
-                        "debit": {"slot_id": "dr", "role": "primary", "account_code": "5000", "account_name": "Expense", "account_type": "expense", "normal_balance": "debit"},
-                        "credit": {"slot_id": "cr", "role": "offset", "account_code": "2000", "account_name": "AP", "account_type": "liability", "normal_balance": "credit"},
+                        "debit": {
+                            "slot_id": "dr",
+                            "role": "primary",
+                            "account_code": "5000",
+                            "account_name": "Expense",
+                            "account_type": "expense",
+                            "normal_balance": "debit",
+                        },
+                        "credit": {
+                            "slot_id": "cr",
+                            "role": "offset",
+                            "account_code": "2000",
+                            "account_name": "AP",
+                            "account_type": "liability",
+                            "normal_balance": "credit",
+                        },
                     },
                 ],
             },
@@ -693,8 +868,22 @@ class TestBuildPipelineEdgeCases:
                         "rule_name": "entry",
                         "source_measure": "total",
                         "priority": 1,
-                        "debit": {"slot_id": "dr", "role": "primary", "account_code": "5000", "account_name": "Expense", "account_type": "expense", "normal_balance": "debit"},
-                        "credit": {"slot_id": "cr", "role": "offset", "account_code": "2000", "account_name": "AP", "account_type": "liability", "normal_balance": "credit"},
+                        "debit": {
+                            "slot_id": "dr",
+                            "role": "primary",
+                            "account_code": "5000",
+                            "account_name": "Expense",
+                            "account_type": "expense",
+                            "normal_balance": "debit",
+                        },
+                        "credit": {
+                            "slot_id": "cr",
+                            "role": "offset",
+                            "account_code": "2000",
+                            "account_name": "AP",
+                            "account_type": "liability",
+                            "normal_balance": "credit",
+                        },
                         "uses_references": ["lookup1"],
                     },
                 ],
@@ -715,6 +904,7 @@ class TestBuildPipelineEdgeCases:
 # ============================================================================
 # TestBuildFormatFromSpec
 # ============================================================================
+
 
 class TestBuildFormatFromSpec:
     def test_returns_graph_pattern(self, output_spec):
@@ -774,6 +964,7 @@ class TestBuildFormatFromSpec:
 # TestBuildPipelineConditions
 # ============================================================================
 
+
 class TestBuildPipelineConditions:
     def test_full_pipeline_with_conditions(self):
         """End-to-end: pipeline spec with conditions produces valid graph with CONDITION + WHEN nodes."""
@@ -802,8 +993,22 @@ class TestBuildPipelineConditions:
                         "source_measure": "paid_amount",
                         "priority": 1,
                         "when": "is_paid",
-                        "debit": {"slot_id": "dr", "role": "primary", "account_code": "1200", "account_name": "AR", "account_type": "asset", "normal_balance": "debit"},
-                        "credit": {"slot_id": "cr", "role": "offset", "account_code": "4000", "account_name": "Revenue", "account_type": "revenue", "normal_balance": "credit"},
+                        "debit": {
+                            "slot_id": "dr",
+                            "role": "primary",
+                            "account_code": "1200",
+                            "account_name": "AR",
+                            "account_type": "asset",
+                            "normal_balance": "debit",
+                        },
+                        "credit": {
+                            "slot_id": "cr",
+                            "role": "offset",
+                            "account_code": "4000",
+                            "account_name": "Revenue",
+                            "account_type": "revenue",
+                            "normal_balance": "credit",
+                        },
                     },
                 ],
             },
@@ -842,8 +1047,22 @@ class TestBuildPipelineConditions:
                         "source_measure": "total",
                         "priority": 1,
                         "when": "is_paid",
-                        "debit": {"slot_id": "dr", "role": "primary", "account_code": "1200", "account_name": "AR", "account_type": "asset", "normal_balance": "debit"},
-                        "credit": {"slot_id": "cr", "role": "offset", "account_code": "4000", "account_name": "Revenue", "account_type": "revenue", "normal_balance": "credit"},
+                        "debit": {
+                            "slot_id": "dr",
+                            "role": "primary",
+                            "account_code": "1200",
+                            "account_name": "AR",
+                            "account_type": "asset",
+                            "normal_balance": "debit",
+                        },
+                        "credit": {
+                            "slot_id": "cr",
+                            "role": "offset",
+                            "account_code": "4000",
+                            "account_name": "Revenue",
+                            "account_type": "revenue",
+                            "normal_balance": "credit",
+                        },
                     },
                 ],
             },
@@ -876,8 +1095,22 @@ class TestBuildPipelineConditions:
                         "rule_name": "entry",
                         "source_measure": "total",
                         "priority": 1,
-                        "debit": {"slot_id": "dr", "role": "primary", "account_code": "5000", "account_name": "Expense", "account_type": "expense", "normal_balance": "debit"},
-                        "credit": {"slot_id": "cr", "role": "offset", "account_code": "2000", "account_name": "AP", "account_type": "liability", "normal_balance": "credit"},
+                        "debit": {
+                            "slot_id": "dr",
+                            "role": "primary",
+                            "account_code": "5000",
+                            "account_name": "Expense",
+                            "account_type": "expense",
+                            "normal_balance": "debit",
+                        },
+                        "credit": {
+                            "slot_id": "cr",
+                            "role": "offset",
+                            "account_code": "2000",
+                            "account_name": "AP",
+                            "account_type": "liability",
+                            "normal_balance": "credit",
+                        },
                     },
                 ],
             },
@@ -894,6 +1127,7 @@ class TestBuildPipelineConditions:
 # TestBuildRecipeNodesNormalization — BUG-001
 # ============================================================================
 
+
 class TestBuildRecipeNodesNormalization:
     """Tests for plural/singular key normalization and missing key errors."""
 
@@ -903,8 +1137,22 @@ class TestBuildRecipeNodesNormalization:
             "rule_name": "test_rule",
             "source_measure": "total",
             "priority": 1,
-            "debit": {"slot_id": "dr", "role": "primary", "account_code": "5000", "account_name": "Expense", "account_type": "expense", "normal_balance": "debit"},
-            "credit": {"slot_id": "cr", "role": "offset", "account_code": "2000", "account_name": "AP", "account_type": "liability", "normal_balance": "credit"},
+            "debit": {
+                "slot_id": "dr",
+                "role": "primary",
+                "account_code": "5000",
+                "account_name": "Expense",
+                "account_type": "expense",
+                "normal_balance": "debit",
+            },
+            "credit": {
+                "slot_id": "cr",
+                "role": "offset",
+                "account_code": "2000",
+                "account_name": "AP",
+                "account_type": "liability",
+                "normal_balance": "credit",
+            },
         }
         rule.update(overrides)
         return rule

@@ -2,20 +2,20 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
+from domain.logic import (
+    build_output_format_pattern,
+    build_recipe_pattern,
+    build_source_schema_pattern,
+    compose_pipeline_pattern,
+)
 from domain.types import (
     GraphPattern,
     Node,
     NodeLabel,
     Relationship,
     RelationshipType,
-)
-from domain.logic import (
-    build_output_format_pattern,
-    build_recipe_pattern,
-    build_source_schema_pattern,
-    compose_pipeline_pattern,
 )
 
 
@@ -25,16 +25,16 @@ def _generate_node_id(recipe_id: str, prefix: str, name: str) -> str:
 
 
 def _build_schema_nodes(
-    schema_spec: Dict[str, Any],
+    schema_spec: dict[str, Any],
     recipe_id: str,
-) -> Tuple[Node, List[Node], List[Node], List[Relationship]]:
+) -> tuple[Node, list[Node], list[Node], list[Relationship]]:
     """Build SourceSchema + Column + Measure nodes and all rels.
 
     Returns: (schema_node, column_nodes, measure_nodes, relationships)
     """
     schema_id = _generate_node_id(recipe_id, "schema", schema_spec["name"])
 
-    schema_props: Dict[str, Any] = {
+    schema_props: dict[str, Any] = {
         "recipe_id": recipe_id,
         "name": schema_spec["name"],
         "source_system": schema_spec["source_system"],
@@ -51,11 +51,11 @@ def _build_schema_nodes(
     )
 
     # Columns
-    column_nodes: List[Node] = []
-    col_rels: List[Relationship] = []
+    column_nodes: list[Node] = []
+    col_rels: list[Relationship] = []
     for col_spec in schema_spec.get("columns", []):
         col_id = _generate_node_id(recipe_id, "col", col_spec["name"])
-        col_props: Dict[str, Any] = {
+        col_props: dict[str, Any] = {
             "recipe_id": recipe_id,
             "name": col_spec["name"],
             "position": col_spec["position"],
@@ -68,24 +68,26 @@ def _build_schema_nodes(
             col_props["description"] = col_spec["description"]
 
         column_nodes.append(Node(id=col_id, labels={NodeLabel.COLUMN}, properties=col_props))
-        col_rels.append(Relationship(
-            id=_generate_node_id(recipe_id, "rel_has_col", col_spec["name"]),
-            type=RelationshipType.HAS_COLUMN,
-            start_node_id=schema_id,
-            end_node_id=col_id,
-            properties={},
-        ))
+        col_rels.append(
+            Relationship(
+                id=_generate_node_id(recipe_id, "rel_has_col", col_spec["name"]),
+                type=RelationshipType.HAS_COLUMN,
+                start_node_id=schema_id,
+                end_node_id=col_id,
+                properties={},
+            )
+        )
 
     # Build a column name → column ID map for AGGREGATES
     col_name_to_id = {c.properties["name"]: c.id for c in column_nodes}
 
     # Measures
-    measure_nodes: List[Node] = []
-    msr_rels: List[Relationship] = []
-    agg_rels: List[Relationship] = []
+    measure_nodes: list[Node] = []
+    msr_rels: list[Relationship] = []
+    agg_rels: list[Relationship] = []
     for msr_spec in schema_spec.get("measures", []):
         msr_id = _generate_node_id(recipe_id, "msr", msr_spec["name"])
-        msr_props: Dict[str, Any] = {
+        msr_props: dict[str, Any] = {
             "recipe_id": recipe_id,
             "name": msr_spec["name"],
             "operation": msr_spec["operation"],
@@ -103,41 +105,45 @@ def _build_schema_nodes(
             msr_props["split_column"] = msr_spec["split_column"]
 
         measure_nodes.append(Node(id=msr_id, labels={NodeLabel.MEASURE}, properties=msr_props))
-        msr_rels.append(Relationship(
-            id=_generate_node_id(recipe_id, "rel_has_msr", msr_spec["name"]),
-            type=RelationshipType.HAS_MEASURE,
-            start_node_id=schema_id,
-            end_node_id=msr_id,
-            properties={},
-        ))
+        msr_rels.append(
+            Relationship(
+                id=_generate_node_id(recipe_id, "rel_has_msr", msr_spec["name"]),
+                type=RelationshipType.HAS_MEASURE,
+                start_node_id=schema_id,
+                end_node_id=msr_id,
+                properties={},
+            )
+        )
 
         # AGGREGATES: measure → column
         source_col = msr_spec.get("source_column")
         if source_col and source_col in col_name_to_id:
-            agg_rels.append(Relationship(
-                id=_generate_node_id(recipe_id, "rel_agg", msr_spec["name"]),
-                type=RelationshipType.AGGREGATES,
-                start_node_id=msr_id,
-                end_node_id=col_name_to_id[source_col],
-                properties={},
-            ))
+            agg_rels.append(
+                Relationship(
+                    id=_generate_node_id(recipe_id, "rel_agg", msr_spec["name"]),
+                    type=RelationshipType.AGGREGATES,
+                    start_node_id=msr_id,
+                    end_node_id=col_name_to_id[source_col],
+                    properties={},
+                )
+            )
 
     all_rels = col_rels + msr_rels + agg_rels
     return schema_node, column_nodes, measure_nodes, all_rels
 
 
 def _build_recipe_nodes(
-    recipe_spec: Dict[str, Any],
+    recipe_spec: dict[str, Any],
     schema_node_id: str,
     recipe_id: str,
-) -> Tuple[Node, List[Node], List[Node], List[Node], List[Node], List[Node], List[Relationship]]:
+) -> tuple[Node, list[Node], list[Node], list[Node], list[Node], list[Node], list[Relationship]]:
     """Build AccountingRecipe + MappingRule + AccountSlot + Account + Reference + Condition nodes and all rels.
 
     Returns: (recipe_node, rule_nodes, slot_nodes, account_nodes, reference_nodes, condition_nodes, relationships)
     """
     recipe_node_id = _generate_node_id(recipe_id, "recipe", recipe_spec["name"].replace(" ", "_").lower())
 
-    recipe_props: Dict[str, Any] = {
+    recipe_props: dict[str, Any] = {
         "recipe_id": recipe_id,
         "name": recipe_spec["name"],
         "source_schema": recipe_spec.get("source_schema", ""),
@@ -164,18 +170,18 @@ def _build_recipe_nodes(
         properties={},
     )
 
-    rule_nodes: List[Node] = []
-    slot_nodes: List[Node] = []
-    account_nodes_map: Dict[str, Node] = {}  # account_code → Node (dedup)
-    reference_nodes_map: Dict[str, Node] = {}  # ref id → Node
-    condition_nodes: List[Node] = []
-    condition_id_map: Dict[str, str] = {}  # condition_id → node ID
-    relationships: List[Relationship] = [transforms_rel]
+    rule_nodes: list[Node] = []
+    slot_nodes: list[Node] = []
+    account_nodes_map: dict[str, Node] = {}  # account_code → Node (dedup)
+    reference_nodes_map: dict[str, Node] = {}  # ref id → Node
+    condition_nodes: list[Node] = []
+    condition_id_map: dict[str, str] = {}  # condition_id → node ID
+    relationships: list[Relationship] = [transforms_rel]
 
     # Build condition nodes so rules can reference them via WHEN
     for cond_spec in recipe_spec.get("conditions", []):
         cond_id = _generate_node_id(recipe_id, "cond", cond_spec["condition_id"])
-        cond_props: Dict[str, Any] = {
+        cond_props: dict[str, Any] = {
             "recipe_id": recipe_id,
             "condition_id": cond_spec["condition_id"],
             "column": cond_spec["column"],
@@ -211,7 +217,7 @@ def _build_recipe_nodes(
                 rule_spec[singular] = lst[0] if len(lst) == 1 else lst
 
         rule_id = _generate_node_id(recipe_id, "rule", rule_spec["rule_name"])
-        rule_props: Dict[str, Any] = {
+        rule_props: dict[str, Any] = {
             "recipe_id": recipe_id,
             "rule_name": rule_spec["rule_name"],
             "source_measure": rule_spec["source_measure"],
@@ -225,24 +231,28 @@ def _build_recipe_nodes(
         rule_nodes.append(rule_node)
 
         # HAS_RULE: recipe → rule
-        relationships.append(Relationship(
-            id=_generate_node_id(recipe_id, "rel_has_rule", rule_spec["rule_name"]),
-            type=RelationshipType.HAS_RULE,
-            start_node_id=recipe_node_id,
-            end_node_id=rule_id,
-            properties={},
-        ))
+        relationships.append(
+            Relationship(
+                id=_generate_node_id(recipe_id, "rel_has_rule", rule_spec["rule_name"]),
+                type=RelationshipType.HAS_RULE,
+                start_node_id=recipe_node_id,
+                end_node_id=rule_id,
+                properties={},
+            )
+        )
 
         # WHEN: rule → condition (optional)
         when_cond_id = rule_spec.get("when")
         if when_cond_id and when_cond_id in condition_id_map:
-            relationships.append(Relationship(
-                id=_generate_node_id(recipe_id, "rel_when", rule_spec["rule_name"]),
-                type=RelationshipType.WHEN,
-                start_node_id=rule_id,
-                end_node_id=condition_id_map[when_cond_id],
-                properties={},
-            ))
+            relationships.append(
+                Relationship(
+                    id=_generate_node_id(recipe_id, "rel_when", rule_spec["rule_name"]),
+                    type=RelationshipType.WHEN,
+                    start_node_id=rule_id,
+                    end_node_id=condition_id_map[when_cond_id],
+                    properties={},
+                )
+            )
 
         # Validate both sides present before creating slots
         for required_key in ("debit", "credit"):
@@ -258,7 +268,7 @@ def _build_recipe_nodes(
 
             slot_id_str = side_spec["slot_id"]
             slot_node_id = _generate_node_id(recipe_id, "slot", slot_id_str)
-            slot_props: Dict[str, Any] = {
+            slot_props: dict[str, Any] = {
                 "recipe_id": recipe_id,
                 "slot_id": slot_id_str,
                 "role": side_spec["role"],
@@ -268,20 +278,22 @@ def _build_recipe_nodes(
             slot_nodes.append(slot_node)
 
             # DEBITS/CREDITS: rule → slot
-            relationships.append(Relationship(
-                id=_generate_node_id(recipe_id, f"rel_{side_key}", f"{rule_spec['rule_name']}_{slot_id_str}"),
-                type=rel_type,
-                start_node_id=rule_id,
-                end_node_id=slot_node_id,
-                properties={},
-            ))
+            relationships.append(
+                Relationship(
+                    id=_generate_node_id(recipe_id, f"rel_{side_key}", f"{rule_spec['rule_name']}_{slot_id_str}"),
+                    type=rel_type,
+                    start_node_id=rule_id,
+                    end_node_id=slot_node_id,
+                    properties={},
+                )
+            )
 
             # Account node (deduplicated by account_code)
             acct_code = side_spec.get("account_code")
             if acct_code:
                 if acct_code not in account_nodes_map:
                     acct_id = _generate_node_id(recipe_id, "acct", acct_code)
-                    acct_props: Dict[str, Any] = {
+                    acct_props: dict[str, Any] = {
                         "code": acct_code,
                         "name": side_spec.get("account_name", ""),
                         "account_type": side_spec.get("account_type", ""),
@@ -289,30 +301,36 @@ def _build_recipe_nodes(
                         "is_active": True,
                     }
                     account_nodes_map[acct_code] = Node(
-                        id=acct_id, labels={NodeLabel.ACCOUNT}, properties=acct_props,
+                        id=acct_id,
+                        labels={NodeLabel.ACCOUNT},
+                        properties=acct_props,
                     )
 
                 # MAPPED_TO: slot → account
                 acct_node = account_nodes_map[acct_code]
-                relationships.append(Relationship(
-                    id=_generate_node_id(recipe_id, "rel_map", f"{slot_id_str}_{acct_code}"),
-                    type=RelationshipType.MAPPED_TO,
-                    start_node_id=slot_node_id,
-                    end_node_id=acct_node.id,
-                    properties={},
-                ))
+                relationships.append(
+                    Relationship(
+                        id=_generate_node_id(recipe_id, "rel_map", f"{slot_id_str}_{acct_code}"),
+                        type=RelationshipType.MAPPED_TO,
+                        start_node_id=slot_node_id,
+                        end_node_id=acct_node.id,
+                        properties={},
+                    )
+                )
 
         # USES_REFERENCE: rule → reference nodes
         for ref_key in rule_spec.get("uses_references", []):
             if ref_key in reference_nodes_map:
                 ref_node = reference_nodes_map[ref_key]
-                relationships.append(Relationship(
-                    id=_generate_node_id(recipe_id, "rel_uses_ref", f"{rule_spec['rule_name']}_{ref_key}"),
-                    type=RelationshipType.USES_REFERENCE,
-                    start_node_id=rule_id,
-                    end_node_id=ref_node.id,
-                    properties={},
-                ))
+                relationships.append(
+                    Relationship(
+                        id=_generate_node_id(recipe_id, "rel_uses_ref", f"{rule_spec['rule_name']}_{ref_key}"),
+                        type=RelationshipType.USES_REFERENCE,
+                        start_node_id=rule_id,
+                        end_node_id=ref_node.id,
+                        properties={},
+                    )
+                )
 
     account_nodes = list(account_nodes_map.values())
     reference_nodes = list(reference_nodes_map.values())
@@ -320,16 +338,16 @@ def _build_recipe_nodes(
 
 
 def _build_output_nodes(
-    output_spec: Dict[str, Any],
+    output_spec: dict[str, Any],
     format_id: str,
-) -> Tuple[Node, List[Node], List[Node], Optional[Node], List[Relationship]]:
+) -> tuple[Node, list[Node], list[Node], Node | None, list[Relationship]]:
     """Build OutputFormat + OutputColumn + ValidationRule + EntryStructure nodes and all rels.
 
     Returns: (format_node, column_nodes, validation_nodes, entry_structure_node, relationships)
     """
     fmt_id = _generate_node_id(format_id, "fmt", output_spec["name"])
 
-    fmt_props: Dict[str, Any] = {
+    fmt_props: dict[str, Any] = {
         "format_id": format_id,
         "name": output_spec["name"],
         "target_system": output_spec["target_system"],
@@ -341,11 +359,11 @@ def _build_output_nodes(
     format_node = Node(id=fmt_id, labels={NodeLabel.OUTPUT_FORMAT}, properties=fmt_props)
 
     # Output columns
-    column_nodes: List[Node] = []
-    col_rels: List[Relationship] = []
+    column_nodes: list[Node] = []
+    col_rels: list[Relationship] = []
     for col_spec in output_spec.get("columns", []):
         ocol_id = _generate_node_id(format_id, "ocol", col_spec["name"])
-        ocol_props: Dict[str, Any] = {
+        ocol_props: dict[str, Any] = {
             "format_id": format_id,
             "name": col_spec["name"],
             "position": col_spec["position"],
@@ -357,20 +375,22 @@ def _build_output_nodes(
             ocol_props["source_mapping"] = col_spec["source_mapping"]
 
         column_nodes.append(Node(id=ocol_id, labels={NodeLabel.OUTPUT_COLUMN}, properties=ocol_props))
-        col_rels.append(Relationship(
-            id=_generate_node_id(format_id, "rel_fmt_col", col_spec["name"]),
-            type=RelationshipType.HAS_COLUMN,
-            start_node_id=fmt_id,
-            end_node_id=ocol_id,
-            properties={},
-        ))
+        col_rels.append(
+            Relationship(
+                id=_generate_node_id(format_id, "rel_fmt_col", col_spec["name"]),
+                type=RelationshipType.HAS_COLUMN,
+                start_node_id=fmt_id,
+                end_node_id=ocol_id,
+                properties={},
+            )
+        )
 
     # Validation rules
-    validation_nodes: List[Node] = []
-    val_rels: List[Relationship] = []
+    validation_nodes: list[Node] = []
+    val_rels: list[Relationship] = []
     for val_spec in output_spec.get("validation_rules", []):
         val_id = _generate_node_id(format_id, "val", val_spec["name"])
-        val_props: Dict[str, Any] = {
+        val_props: dict[str, Any] = {
             "format_id": format_id,
             "name": val_spec["name"],
             "expression": val_spec["expression"],
@@ -380,21 +400,23 @@ def _build_output_nodes(
             val_props["description"] = val_spec["description"]
 
         validation_nodes.append(Node(id=val_id, labels={NodeLabel.VALIDATION_RULE}, properties=val_props))
-        val_rels.append(Relationship(
-            id=_generate_node_id(format_id, "rel_has_val", val_spec["name"]),
-            type=RelationshipType.HAS_VALIDATION,
-            start_node_id=fmt_id,
-            end_node_id=val_id,
-            properties={},
-        ))
+        val_rels.append(
+            Relationship(
+                id=_generate_node_id(format_id, "rel_has_val", val_spec["name"]),
+                type=RelationshipType.HAS_VALIDATION,
+                start_node_id=fmt_id,
+                end_node_id=val_id,
+                properties={},
+            )
+        )
 
     # Entry structure
-    entry_node: Optional[Node] = None
-    entry_rel: Optional[Relationship] = None
+    entry_node: Node | None = None
+    entry_rel: Relationship | None = None
     entry_spec = output_spec.get("entry_structure")
     if entry_spec:
         entry_id = _generate_node_id(format_id, "entry", output_spec["name"])
-        entry_props: Dict[str, Any] = {
+        entry_props: dict[str, Any] = {
             "format_id": format_id,
             "grouping_column": entry_spec["grouping_column"],
             "entry_separator": entry_spec["entry_separator"],
@@ -416,7 +438,7 @@ def _build_output_nodes(
     return format_node, column_nodes, validation_nodes, entry_node, relationships
 
 
-def build_format_from_spec(spec: Dict[str, Any]) -> GraphPattern:
+def build_format_from_spec(spec: dict[str, Any]) -> GraphPattern:
     """Top-level: convert an output format spec → standalone GraphPattern.
 
     The spec must include format_id at the top level.
@@ -424,7 +446,8 @@ def build_format_from_spec(spec: Dict[str, Any]) -> GraphPattern:
     format_id = spec["format_id"]
 
     fmt_node, col_nodes, val_nodes, entry_node, output_rels = _build_output_nodes(
-        spec, format_id,
+        spec,
+        format_id,
     )
 
     col_rels = [r for r in output_rels if r.type == RelationshipType.HAS_COLUMN]
@@ -445,7 +468,7 @@ def build_format_from_spec(spec: Dict[str, Any]) -> GraphPattern:
     )
 
 
-def build_pipeline_from_spec(spec: Dict[str, Any]) -> GraphPattern:
+def build_pipeline_from_spec(spec: dict[str, Any]) -> GraphPattern:
     """Top-level: convert full pipeline spec → composed GraphPattern.
 
     Output format handling: if an 'output' key is present, it is built as a
@@ -457,7 +480,8 @@ def build_pipeline_from_spec(spec: Dict[str, Any]) -> GraphPattern:
     # 1. Build schema subgraph
     schema_spec = spec["schema"]
     schema_node, col_nodes, msr_nodes, schema_rels = _build_schema_nodes(
-        schema_spec, recipe_id,
+        schema_spec,
+        recipe_id,
     )
 
     # Separate relationship types for build_source_schema_pattern
@@ -484,20 +508,35 @@ def build_pipeline_from_spec(spec: Dict[str, Any]) -> GraphPattern:
         recipe_spec = dict(recipe_spec, conditions=schema_spec["conditions"])
 
     recipe_node, rule_nodes, slot_nodes, account_nodes, ref_nodes, cond_nodes, recipe_rels = _build_recipe_nodes(
-        recipe_spec, schema_node.id, recipe_id,
+        recipe_spec,
+        schema_node.id,
+        recipe_id,
     )
 
     # Separate out TRANSFORMS for build_recipe_pattern
     transforms_rel = next(r for r in recipe_rels if r.type == RelationshipType.TRANSFORMS)
-    rule_rels = [r for r in recipe_rels if r.type in (
-        RelationshipType.HAS_RULE, RelationshipType.DEBITS, RelationshipType.CREDITS,
-    )]
+    rule_rels = [
+        r
+        for r in recipe_rels
+        if r.type
+        in (
+            RelationshipType.HAS_RULE,
+            RelationshipType.DEBITS,
+            RelationshipType.CREDITS,
+        )
+    ]
     slot_rels = [r for r in recipe_rels if r.type == RelationshipType.MAPPED_TO]
-    additional_rels = [r for r in recipe_rels if r.type in (
-        RelationshipType.USES_REFERENCE, RelationshipType.WHEN,
-    )]
+    additional_rels = [
+        r
+        for r in recipe_rels
+        if r.type
+        in (
+            RelationshipType.USES_REFERENCE,
+            RelationshipType.WHEN,
+        )
+    ]
 
-    additional_nodes: List[Node] = account_nodes + ref_nodes + cond_nodes
+    additional_nodes: list[Node] = account_nodes + ref_nodes + cond_nodes
 
     recipe_pattern = build_recipe_pattern(
         recipe_node=recipe_node,

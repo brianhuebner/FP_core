@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from domain import NodeLabel, RelationshipType
+from domain import NodeLabel
 from domain.logic import validate_output_format
 from domain.ontology import ValidationResult, validate_node_properties
 from domain.ontology_recipe import merged_ontology
@@ -63,8 +63,8 @@ def validate(format_id: str, results_dir: str) -> dict:
             node_counts[label_name] = node_counts.get(label_name, 0) + 1
 
     expected = {
-        "OutputFormat": (1, 1),     # exactly 1
-        "OutputColumn": (6, 99),    # exactly 6
+        "OutputFormat": (1, 1),  # exactly 1
+        "OutputColumn": (6, 99),  # exactly 6
         "ValidationRule": (1, 99),  # at least 1
     }
 
@@ -131,7 +131,8 @@ def validate(format_id: str, results_dir: str) -> dict:
         retry_evidence = (
             "retry" in agent_text_lower
             or "failed validation" in agent_text_lower
-            or "fix" in agent_text_lower and "error" in agent_text_lower
+            or "fix" in agent_text_lower
+            and "error" in agent_text_lower
         )
         if build_calls > 1 or retry_evidence:
             first_attempt = False
@@ -152,30 +153,22 @@ def validate(format_id: str, results_dir: str) -> dict:
 
     # --- Scoring ---
     # Format found in Neo4j: 30%
-    report["scores"]["format_loads"] = (
-        1.0 if report["checks"]["format_loads"]["pass"] else 0.0
-    ) * 0.3
+    report["scores"]["format_loads"] = (1.0 if report["checks"]["format_loads"]["pass"] else 0.0) * 0.3
 
     # Node counts correct: 20%
     report["scores"]["node_counts"] = (1.0 if count_pass else 0.0) * 0.2
 
     # EntryStructure present with correct properties: 10%
-    report["scores"]["entry_structure_present"] = (
-        1.0 if entry_present else 0.0
-    ) * 0.1
+    report["scores"]["entry_structure_present"] = (1.0 if entry_present else 0.0) * 0.1
 
     # Gate 1 clean: 15%
-    report["scores"]["gate1_clean"] = (
-        1.0 if merged.is_valid else 0.0
-    ) * 0.15
+    report["scores"]["gate1_clean"] = (1.0 if merged.is_valid else 0.0) * 0.15
 
     # First-attempt success: 15%
     report["scores"]["first_attempt"] = (1.0 if first_attempt else 0.0) * 0.15
 
     # Ontology consulted: 10%
-    report["scores"]["ontology_consulted"] = (
-        1.0 if ontology_consulted else 0.0
-    ) * 0.1
+    report["scores"]["ontology_consulted"] = (1.0 if ontology_consulted else 0.0) * 0.1
 
     report["total_score"] = sum(report["scores"].values())
 
@@ -189,9 +182,9 @@ def _write_report(report: dict, results_path: Path):
         json.dump(report, f, indent=2, default=str)
 
     # Print summary
-    print(f"\n{'='*60}")
-    print(f"  Eval 3: Build Output Format — Validation Report")
-    print(f"{'='*60}")
+    print(f"\n{'=' * 60}")
+    print("  Eval 3: Build Output Format — Validation Report")
+    print(f"{'=' * 60}")
     print(f"  Format ID: {report['format_id']}")
     print()
 
@@ -213,12 +206,12 @@ def _write_report(report: dict, results_path: Path):
                 print(f"         {err}")
 
     print()
-    print(f"  Scores:")
+    print("  Scores:")
     for score_name, score_val in report["scores"].items():
         print(f"    {score_name}: {score_val:.1%}")
-    print(f"  {'─'*40}")
+    print(f"  {'─' * 40}")
     print(f"    TOTAL: {report['total_score']:.1%}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     print(f"\n  Full report: {report_path}")
 

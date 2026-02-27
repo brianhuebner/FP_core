@@ -4,10 +4,11 @@
 Builds a minimal payroll pipeline graph in-memory and verifies
 that the summarizer functions extract the correct structure.
 """
+
 import pytest
 
-from domain.types import GraphPattern, Node, NodeLabel, Relationship, RelationshipType
 from domain.ontology import ValidationResult
+from domain.types import GraphPattern, Node, NodeLabel, Relationship, RelationshipType
 from mcp_server.summarizers import (
     _find_nodes_by_label,
     _find_related_nodes,
@@ -29,73 +30,168 @@ FORMAT_ID = RECIPE_ID
 # Fixture: minimal payroll pipeline graph
 # ============================================================================
 
+
 def _build_schema_subgraph():
     """Build SourceSchema + Columns + Measures nodes and relationships."""
     schema = Node(
-        id="schema_payroll", labels={NodeLabel.SOURCE_SCHEMA},
+        id="schema_payroll",
+        labels={NodeLabel.SOURCE_SCHEMA},
         properties={
-            "recipe_id": RECIPE_ID, "name": "payroll_export",
-            "source_system": "csv_import", "file_pattern": "payroll_*.csv",
+            "recipe_id": RECIPE_ID,
+            "name": "payroll_export",
+            "source_system": "csv_import",
+            "file_pattern": "payroll_*.csv",
             "row_grain": "employee_pay_period",
         },
     )
     columns = [
-        Node(id="col_emp_id", labels={NodeLabel.COLUMN}, properties={
-            "recipe_id": RECIPE_ID, "name": "employee_id", "position": 1,
-            "data_type": "string", "role": "identifier", "required": True,
-        }),
-        Node(id="col_pay_date", labels={NodeLabel.COLUMN}, properties={
-            "recipe_id": RECIPE_ID, "name": "pay_date", "position": 2,
-            "data_type": "date", "role": "date", "required": True,
-        }),
-        Node(id="col_gross", labels={NodeLabel.COLUMN}, properties={
-            "recipe_id": RECIPE_ID, "name": "gross_pay", "position": 3,
-            "data_type": "decimal", "role": "amount", "required": True,
-        }),
-        Node(id="col_tax", labels={NodeLabel.COLUMN}, properties={
-            "recipe_id": RECIPE_ID, "name": "tax_withheld", "position": 4,
-            "data_type": "decimal", "role": "amount", "required": True,
-        }),
-        Node(id="col_net", labels={NodeLabel.COLUMN}, properties={
-            "recipe_id": RECIPE_ID, "name": "net_pay", "position": 5,
-            "data_type": "decimal", "role": "amount", "required": True,
-        }),
-        Node(id="col_dept", labels={NodeLabel.COLUMN}, properties={
-            "recipe_id": RECIPE_ID, "name": "department", "position": 6,
-            "data_type": "string", "role": "category", "required": False,
-        }),
+        Node(
+            id="col_emp_id",
+            labels={NodeLabel.COLUMN},
+            properties={
+                "recipe_id": RECIPE_ID,
+                "name": "employee_id",
+                "position": 1,
+                "data_type": "string",
+                "role": "identifier",
+                "required": True,
+            },
+        ),
+        Node(
+            id="col_pay_date",
+            labels={NodeLabel.COLUMN},
+            properties={
+                "recipe_id": RECIPE_ID,
+                "name": "pay_date",
+                "position": 2,
+                "data_type": "date",
+                "role": "date",
+                "required": True,
+            },
+        ),
+        Node(
+            id="col_gross",
+            labels={NodeLabel.COLUMN},
+            properties={
+                "recipe_id": RECIPE_ID,
+                "name": "gross_pay",
+                "position": 3,
+                "data_type": "decimal",
+                "role": "amount",
+                "required": True,
+            },
+        ),
+        Node(
+            id="col_tax",
+            labels={NodeLabel.COLUMN},
+            properties={
+                "recipe_id": RECIPE_ID,
+                "name": "tax_withheld",
+                "position": 4,
+                "data_type": "decimal",
+                "role": "amount",
+                "required": True,
+            },
+        ),
+        Node(
+            id="col_net",
+            labels={NodeLabel.COLUMN},
+            properties={
+                "recipe_id": RECIPE_ID,
+                "name": "net_pay",
+                "position": 5,
+                "data_type": "decimal",
+                "role": "amount",
+                "required": True,
+            },
+        ),
+        Node(
+            id="col_dept",
+            labels={NodeLabel.COLUMN},
+            properties={
+                "recipe_id": RECIPE_ID,
+                "name": "department",
+                "position": 6,
+                "data_type": "string",
+                "role": "category",
+                "required": False,
+            },
+        ),
     ]
     measures = [
-        Node(id="msr_total_gross", labels={NodeLabel.MEASURE}, properties={
-            "recipe_id": RECIPE_ID, "name": "total_gross_pay",
-            "operation": "sum", "description": "Sum of gross pay",
-        }),
-        Node(id="msr_total_tax", labels={NodeLabel.MEASURE}, properties={
-            "recipe_id": RECIPE_ID, "name": "total_tax_withheld",
-            "operation": "sum", "description": "Sum of tax withheld",
-        }),
-        Node(id="msr_total_net", labels={NodeLabel.MEASURE}, properties={
-            "recipe_id": RECIPE_ID, "name": "total_net_pay",
-            "operation": "sum", "description": "Sum of net pay",
-        }),
+        Node(
+            id="msr_total_gross",
+            labels={NodeLabel.MEASURE},
+            properties={
+                "recipe_id": RECIPE_ID,
+                "name": "total_gross_pay",
+                "operation": "sum",
+                "description": "Sum of gross pay",
+            },
+        ),
+        Node(
+            id="msr_total_tax",
+            labels={NodeLabel.MEASURE},
+            properties={
+                "recipe_id": RECIPE_ID,
+                "name": "total_tax_withheld",
+                "operation": "sum",
+                "description": "Sum of tax withheld",
+            },
+        ),
+        Node(
+            id="msr_total_net",
+            labels={NodeLabel.MEASURE},
+            properties={
+                "recipe_id": RECIPE_ID,
+                "name": "total_net_pay",
+                "operation": "sum",
+                "description": "Sum of net pay",
+            },
+        ),
     ]
     col_rels = [
-        Relationship(id=f"rel_has_col_{c.id}", type=RelationshipType.HAS_COLUMN,
-                     start_node_id="schema_payroll", end_node_id=c.id, properties={})
+        Relationship(
+            id=f"rel_has_col_{c.id}",
+            type=RelationshipType.HAS_COLUMN,
+            start_node_id="schema_payroll",
+            end_node_id=c.id,
+            properties={},
+        )
         for c in columns
     ]
     msr_rels = [
-        Relationship(id=f"rel_has_msr_{m.id}", type=RelationshipType.HAS_MEASURE,
-                     start_node_id="schema_payroll", end_node_id=m.id, properties={})
+        Relationship(
+            id=f"rel_has_msr_{m.id}",
+            type=RelationshipType.HAS_MEASURE,
+            start_node_id="schema_payroll",
+            end_node_id=m.id,
+            properties={},
+        )
         for m in measures
     ]
     agg_rels = [
-        Relationship(id="rel_agg_gross", type=RelationshipType.AGGREGATES,
-                     start_node_id="msr_total_gross", end_node_id="col_gross", properties={}),
-        Relationship(id="rel_agg_tax", type=RelationshipType.AGGREGATES,
-                     start_node_id="msr_total_tax", end_node_id="col_tax", properties={}),
-        Relationship(id="rel_agg_net", type=RelationshipType.AGGREGATES,
-                     start_node_id="msr_total_net", end_node_id="col_net", properties={}),
+        Relationship(
+            id="rel_agg_gross",
+            type=RelationshipType.AGGREGATES,
+            start_node_id="msr_total_gross",
+            end_node_id="col_gross",
+            properties={},
+        ),
+        Relationship(
+            id="rel_agg_tax",
+            type=RelationshipType.AGGREGATES,
+            start_node_id="msr_total_tax",
+            end_node_id="col_tax",
+            properties={},
+        ),
+        Relationship(
+            id="rel_agg_net",
+            type=RelationshipType.AGGREGATES,
+            start_node_id="msr_total_net",
+            end_node_id="col_net",
+            properties={},
+        ),
     ]
     nodes = [schema] + columns + measures
     rels = col_rels + msr_rels + agg_rels
@@ -105,111 +201,275 @@ def _build_schema_subgraph():
 def _build_recipe_subgraph():
     """Build AccountingRecipe + MappingRules + AccountSlots + Accounts nodes and relationships."""
     recipe = Node(
-        id="recipe_payroll", labels={NodeLabel.ACCOUNTING_RECIPE},
+        id="recipe_payroll",
+        labels={NodeLabel.ACCOUNTING_RECIPE},
         properties={
-            "recipe_id": RECIPE_ID, "name": "Monthly Payroll Journal",
-            "source_schema": "payroll_export", "batch_key": "pay_date",
-            "journal_no_format": "PY-{date:%Y%m}-{seq:04d}", "visibility": "private",
+            "recipe_id": RECIPE_ID,
+            "name": "Monthly Payroll Journal",
+            "source_schema": "payroll_export",
+            "batch_key": "pay_date",
+            "journal_no_format": "PY-{date:%Y%m}-{seq:04d}",
+            "visibility": "private",
         },
     )
     transforms_rel = Relationship(
-        id="rel_transforms", type=RelationshipType.TRANSFORMS,
-        start_node_id="recipe_payroll", end_node_id="schema_payroll", properties={},
+        id="rel_transforms",
+        type=RelationshipType.TRANSFORMS,
+        start_node_id="recipe_payroll",
+        end_node_id="schema_payroll",
+        properties={},
     )
     rules = [
-        Node(id="rule_gross", labels={NodeLabel.MAPPING_RULE}, properties={
-            "recipe_id": RECIPE_ID, "rule_name": "gross_pay_entry",
-            "source_measure": "total_gross_pay",
-            "memo_template": "Salary expense - {pay_date:%B %Y}", "priority": 1,
-        }),
-        Node(id="rule_tax", labels={NodeLabel.MAPPING_RULE}, properties={
-            "recipe_id": RECIPE_ID, "rule_name": "tax_withholding_entry",
-            "source_measure": "total_tax_withheld",
-            "memo_template": "Tax withholding - {pay_date:%B %Y}", "priority": 2,
-        }),
-        Node(id="rule_net", labels={NodeLabel.MAPPING_RULE}, properties={
-            "recipe_id": RECIPE_ID, "rule_name": "net_pay_entry",
-            "source_measure": "total_net_pay",
-            "memo_template": "Net pay disbursement - {pay_date:%B %Y}", "priority": 3,
-        }),
+        Node(
+            id="rule_gross",
+            labels={NodeLabel.MAPPING_RULE},
+            properties={
+                "recipe_id": RECIPE_ID,
+                "rule_name": "gross_pay_entry",
+                "source_measure": "total_gross_pay",
+                "memo_template": "Salary expense - {pay_date:%B %Y}",
+                "priority": 1,
+            },
+        ),
+        Node(
+            id="rule_tax",
+            labels={NodeLabel.MAPPING_RULE},
+            properties={
+                "recipe_id": RECIPE_ID,
+                "rule_name": "tax_withholding_entry",
+                "source_measure": "total_tax_withheld",
+                "memo_template": "Tax withholding - {pay_date:%B %Y}",
+                "priority": 2,
+            },
+        ),
+        Node(
+            id="rule_net",
+            labels={NodeLabel.MAPPING_RULE},
+            properties={
+                "recipe_id": RECIPE_ID,
+                "rule_name": "net_pay_entry",
+                "source_measure": "total_net_pay",
+                "memo_template": "Net pay disbursement - {pay_date:%B %Y}",
+                "priority": 3,
+            },
+        ),
     ]
     slots = [
-        Node(id="slot_salary_dr", labels={NodeLabel.ACCOUNT_SLOT}, properties={
-            "recipe_id": RECIPE_ID, "slot_id": "salary_expense_debit",
-            "role": "primary", "entry_type": "debit",
-        }),
-        Node(id="slot_payroll_cr_gross", labels={NodeLabel.ACCOUNT_SLOT}, properties={
-            "recipe_id": RECIPE_ID, "slot_id": "payroll_payable_credit_gross",
-            "role": "offset", "entry_type": "credit",
-        }),
-        Node(id="slot_payroll_dr_tax", labels={NodeLabel.ACCOUNT_SLOT}, properties={
-            "recipe_id": RECIPE_ID, "slot_id": "payroll_payable_debit_tax",
-            "role": "primary", "entry_type": "debit",
-        }),
-        Node(id="slot_tax_cr", labels={NodeLabel.ACCOUNT_SLOT}, properties={
-            "recipe_id": RECIPE_ID, "slot_id": "tax_payable_credit",
-            "role": "offset", "entry_type": "credit",
-        }),
-        Node(id="slot_payroll_dr_net", labels={NodeLabel.ACCOUNT_SLOT}, properties={
-            "recipe_id": RECIPE_ID, "slot_id": "payroll_payable_debit_net",
-            "role": "primary", "entry_type": "debit",
-        }),
-        Node(id="slot_cash_cr", labels={NodeLabel.ACCOUNT_SLOT}, properties={
-            "recipe_id": RECIPE_ID, "slot_id": "cash_credit",
-            "role": "offset", "entry_type": "credit",
-        }),
+        Node(
+            id="slot_salary_dr",
+            labels={NodeLabel.ACCOUNT_SLOT},
+            properties={
+                "recipe_id": RECIPE_ID,
+                "slot_id": "salary_expense_debit",
+                "role": "primary",
+                "entry_type": "debit",
+            },
+        ),
+        Node(
+            id="slot_payroll_cr_gross",
+            labels={NodeLabel.ACCOUNT_SLOT},
+            properties={
+                "recipe_id": RECIPE_ID,
+                "slot_id": "payroll_payable_credit_gross",
+                "role": "offset",
+                "entry_type": "credit",
+            },
+        ),
+        Node(
+            id="slot_payroll_dr_tax",
+            labels={NodeLabel.ACCOUNT_SLOT},
+            properties={
+                "recipe_id": RECIPE_ID,
+                "slot_id": "payroll_payable_debit_tax",
+                "role": "primary",
+                "entry_type": "debit",
+            },
+        ),
+        Node(
+            id="slot_tax_cr",
+            labels={NodeLabel.ACCOUNT_SLOT},
+            properties={
+                "recipe_id": RECIPE_ID,
+                "slot_id": "tax_payable_credit",
+                "role": "offset",
+                "entry_type": "credit",
+            },
+        ),
+        Node(
+            id="slot_payroll_dr_net",
+            labels={NodeLabel.ACCOUNT_SLOT},
+            properties={
+                "recipe_id": RECIPE_ID,
+                "slot_id": "payroll_payable_debit_net",
+                "role": "primary",
+                "entry_type": "debit",
+            },
+        ),
+        Node(
+            id="slot_cash_cr",
+            labels={NodeLabel.ACCOUNT_SLOT},
+            properties={
+                "recipe_id": RECIPE_ID,
+                "slot_id": "cash_credit",
+                "role": "offset",
+                "entry_type": "credit",
+            },
+        ),
     ]
     accounts = [
-        Node(id="acct_6100", labels={NodeLabel.ACCOUNT}, properties={
-            "code": "6100", "name": "Salary Expense",
-            "account_type": "expense", "normal_balance": "debit", "is_active": True,
-        }),
-        Node(id="acct_2100", labels={NodeLabel.ACCOUNT}, properties={
-            "code": "2100", "name": "Payroll Payable",
-            "account_type": "liability", "normal_balance": "credit", "is_active": True,
-        }),
-        Node(id="acct_2200", labels={NodeLabel.ACCOUNT}, properties={
-            "code": "2200", "name": "Tax Payable",
-            "account_type": "liability", "normal_balance": "credit", "is_active": True,
-        }),
-        Node(id="acct_1010", labels={NodeLabel.ACCOUNT}, properties={
-            "code": "1010", "name": "Cash",
-            "account_type": "asset", "normal_balance": "debit", "is_active": True,
-        }),
+        Node(
+            id="acct_6100",
+            labels={NodeLabel.ACCOUNT},
+            properties={
+                "code": "6100",
+                "name": "Salary Expense",
+                "account_type": "expense",
+                "normal_balance": "debit",
+                "is_active": True,
+            },
+        ),
+        Node(
+            id="acct_2100",
+            labels={NodeLabel.ACCOUNT},
+            properties={
+                "code": "2100",
+                "name": "Payroll Payable",
+                "account_type": "liability",
+                "normal_balance": "credit",
+                "is_active": True,
+            },
+        ),
+        Node(
+            id="acct_2200",
+            labels={NodeLabel.ACCOUNT},
+            properties={
+                "code": "2200",
+                "name": "Tax Payable",
+                "account_type": "liability",
+                "normal_balance": "credit",
+                "is_active": True,
+            },
+        ),
+        Node(
+            id="acct_1010",
+            labels={NodeLabel.ACCOUNT},
+            properties={
+                "code": "1010",
+                "name": "Cash",
+                "account_type": "asset",
+                "normal_balance": "debit",
+                "is_active": True,
+            },
+        ),
     ]
     rule_rels = [
-        Relationship(id="rel_has_rule_gross", type=RelationshipType.HAS_RULE,
-                     start_node_id="recipe_payroll", end_node_id="rule_gross", properties={}),
-        Relationship(id="rel_has_rule_tax", type=RelationshipType.HAS_RULE,
-                     start_node_id="recipe_payroll", end_node_id="rule_tax", properties={}),
-        Relationship(id="rel_has_rule_net", type=RelationshipType.HAS_RULE,
-                     start_node_id="recipe_payroll", end_node_id="rule_net", properties={}),
-        Relationship(id="rel_dr_gross", type=RelationshipType.DEBITS,
-                     start_node_id="rule_gross", end_node_id="slot_salary_dr", properties={}),
-        Relationship(id="rel_cr_gross", type=RelationshipType.CREDITS,
-                     start_node_id="rule_gross", end_node_id="slot_payroll_cr_gross", properties={}),
-        Relationship(id="rel_dr_tax", type=RelationshipType.DEBITS,
-                     start_node_id="rule_tax", end_node_id="slot_payroll_dr_tax", properties={}),
-        Relationship(id="rel_cr_tax", type=RelationshipType.CREDITS,
-                     start_node_id="rule_tax", end_node_id="slot_tax_cr", properties={}),
-        Relationship(id="rel_dr_net", type=RelationshipType.DEBITS,
-                     start_node_id="rule_net", end_node_id="slot_payroll_dr_net", properties={}),
-        Relationship(id="rel_cr_net", type=RelationshipType.CREDITS,
-                     start_node_id="rule_net", end_node_id="slot_cash_cr", properties={}),
+        Relationship(
+            id="rel_has_rule_gross",
+            type=RelationshipType.HAS_RULE,
+            start_node_id="recipe_payroll",
+            end_node_id="rule_gross",
+            properties={},
+        ),
+        Relationship(
+            id="rel_has_rule_tax",
+            type=RelationshipType.HAS_RULE,
+            start_node_id="recipe_payroll",
+            end_node_id="rule_tax",
+            properties={},
+        ),
+        Relationship(
+            id="rel_has_rule_net",
+            type=RelationshipType.HAS_RULE,
+            start_node_id="recipe_payroll",
+            end_node_id="rule_net",
+            properties={},
+        ),
+        Relationship(
+            id="rel_dr_gross",
+            type=RelationshipType.DEBITS,
+            start_node_id="rule_gross",
+            end_node_id="slot_salary_dr",
+            properties={},
+        ),
+        Relationship(
+            id="rel_cr_gross",
+            type=RelationshipType.CREDITS,
+            start_node_id="rule_gross",
+            end_node_id="slot_payroll_cr_gross",
+            properties={},
+        ),
+        Relationship(
+            id="rel_dr_tax",
+            type=RelationshipType.DEBITS,
+            start_node_id="rule_tax",
+            end_node_id="slot_payroll_dr_tax",
+            properties={},
+        ),
+        Relationship(
+            id="rel_cr_tax",
+            type=RelationshipType.CREDITS,
+            start_node_id="rule_tax",
+            end_node_id="slot_tax_cr",
+            properties={},
+        ),
+        Relationship(
+            id="rel_dr_net",
+            type=RelationshipType.DEBITS,
+            start_node_id="rule_net",
+            end_node_id="slot_payroll_dr_net",
+            properties={},
+        ),
+        Relationship(
+            id="rel_cr_net",
+            type=RelationshipType.CREDITS,
+            start_node_id="rule_net",
+            end_node_id="slot_cash_cr",
+            properties={},
+        ),
     ]
     slot_rels = [
-        Relationship(id="rel_map_salary", type=RelationshipType.MAPPED_TO,
-                     start_node_id="slot_salary_dr", end_node_id="acct_6100", properties={}),
-        Relationship(id="rel_map_payroll_cr", type=RelationshipType.MAPPED_TO,
-                     start_node_id="slot_payroll_cr_gross", end_node_id="acct_2100", properties={}),
-        Relationship(id="rel_map_payroll_dr_tax", type=RelationshipType.MAPPED_TO,
-                     start_node_id="slot_payroll_dr_tax", end_node_id="acct_2100", properties={}),
-        Relationship(id="rel_map_tax", type=RelationshipType.MAPPED_TO,
-                     start_node_id="slot_tax_cr", end_node_id="acct_2200", properties={}),
-        Relationship(id="rel_map_payroll_dr_net", type=RelationshipType.MAPPED_TO,
-                     start_node_id="slot_payroll_dr_net", end_node_id="acct_2100", properties={}),
-        Relationship(id="rel_map_cash", type=RelationshipType.MAPPED_TO,
-                     start_node_id="slot_cash_cr", end_node_id="acct_1010", properties={}),
+        Relationship(
+            id="rel_map_salary",
+            type=RelationshipType.MAPPED_TO,
+            start_node_id="slot_salary_dr",
+            end_node_id="acct_6100",
+            properties={},
+        ),
+        Relationship(
+            id="rel_map_payroll_cr",
+            type=RelationshipType.MAPPED_TO,
+            start_node_id="slot_payroll_cr_gross",
+            end_node_id="acct_2100",
+            properties={},
+        ),
+        Relationship(
+            id="rel_map_payroll_dr_tax",
+            type=RelationshipType.MAPPED_TO,
+            start_node_id="slot_payroll_dr_tax",
+            end_node_id="acct_2100",
+            properties={},
+        ),
+        Relationship(
+            id="rel_map_tax",
+            type=RelationshipType.MAPPED_TO,
+            start_node_id="slot_tax_cr",
+            end_node_id="acct_2200",
+            properties={},
+        ),
+        Relationship(
+            id="rel_map_payroll_dr_net",
+            type=RelationshipType.MAPPED_TO,
+            start_node_id="slot_payroll_dr_net",
+            end_node_id="acct_2100",
+            properties={},
+        ),
+        Relationship(
+            id="rel_map_cash",
+            type=RelationshipType.MAPPED_TO,
+            start_node_id="slot_cash_cr",
+            end_node_id="acct_1010",
+            properties={},
+        ),
     ]
     nodes = [recipe] + rules + slots + accounts
     rels = [transforms_rel] + rule_rels + slot_rels
@@ -219,59 +479,129 @@ def _build_recipe_subgraph():
 def _build_output_subgraph():
     """Build OutputFormat + OutputColumns + ValidationRule + EntryStructure nodes and relationships."""
     output_fmt = Node(
-        id="fmt_journal", labels={NodeLabel.OUTPUT_FORMAT},
+        id="fmt_journal",
+        labels={NodeLabel.OUTPUT_FORMAT},
         properties={
-            "format_id": FORMAT_ID, "name": "journal_entry_export",
-            "target_system": "quickbooks", "file_format": "csv", "version": "1.0",
+            "format_id": FORMAT_ID,
+            "name": "journal_entry_export",
+            "target_system": "quickbooks",
+            "file_format": "csv",
+            "version": "1.0",
         },
     )
     out_columns = [
-        Node(id="ocol_journal_no", labels={NodeLabel.OUTPUT_COLUMN}, properties={
-            "format_id": FORMAT_ID, "name": "journal_number", "position": 1,
-            "data_type": "string", "required": True,
-        }),
-        Node(id="ocol_date", labels={NodeLabel.OUTPUT_COLUMN}, properties={
-            "format_id": FORMAT_ID, "name": "journal_date", "position": 2,
-            "data_type": "date", "required": True,
-        }),
-        Node(id="ocol_account", labels={NodeLabel.OUTPUT_COLUMN}, properties={
-            "format_id": FORMAT_ID, "name": "account_code", "position": 3,
-            "data_type": "string", "required": True,
-        }),
-        Node(id="ocol_debit", labels={NodeLabel.OUTPUT_COLUMN}, properties={
-            "format_id": FORMAT_ID, "name": "debit_amount", "position": 4,
-            "data_type": "decimal", "required": True,
-        }),
-        Node(id="ocol_credit", labels={NodeLabel.OUTPUT_COLUMN}, properties={
-            "format_id": FORMAT_ID, "name": "credit_amount", "position": 5,
-            "data_type": "decimal", "required": True,
-        }),
-        Node(id="ocol_memo", labels={NodeLabel.OUTPUT_COLUMN}, properties={
-            "format_id": FORMAT_ID, "name": "memo", "position": 6,
-            "data_type": "string", "required": False,
-        }),
+        Node(
+            id="ocol_journal_no",
+            labels={NodeLabel.OUTPUT_COLUMN},
+            properties={
+                "format_id": FORMAT_ID,
+                "name": "journal_number",
+                "position": 1,
+                "data_type": "string",
+                "required": True,
+            },
+        ),
+        Node(
+            id="ocol_date",
+            labels={NodeLabel.OUTPUT_COLUMN},
+            properties={
+                "format_id": FORMAT_ID,
+                "name": "journal_date",
+                "position": 2,
+                "data_type": "date",
+                "required": True,
+            },
+        ),
+        Node(
+            id="ocol_account",
+            labels={NodeLabel.OUTPUT_COLUMN},
+            properties={
+                "format_id": FORMAT_ID,
+                "name": "account_code",
+                "position": 3,
+                "data_type": "string",
+                "required": True,
+            },
+        ),
+        Node(
+            id="ocol_debit",
+            labels={NodeLabel.OUTPUT_COLUMN},
+            properties={
+                "format_id": FORMAT_ID,
+                "name": "debit_amount",
+                "position": 4,
+                "data_type": "decimal",
+                "required": True,
+            },
+        ),
+        Node(
+            id="ocol_credit",
+            labels={NodeLabel.OUTPUT_COLUMN},
+            properties={
+                "format_id": FORMAT_ID,
+                "name": "credit_amount",
+                "position": 5,
+                "data_type": "decimal",
+                "required": True,
+            },
+        ),
+        Node(
+            id="ocol_memo",
+            labels={NodeLabel.OUTPUT_COLUMN},
+            properties={
+                "format_id": FORMAT_ID,
+                "name": "memo",
+                "position": 6,
+                "data_type": "string",
+                "required": False,
+            },
+        ),
     ]
     out_col_rels = [
-        Relationship(id=f"rel_fmt_col_{c.id}", type=RelationshipType.HAS_COLUMN,
-                     start_node_id="fmt_journal", end_node_id=c.id, properties={})
+        Relationship(
+            id=f"rel_fmt_col_{c.id}",
+            type=RelationshipType.HAS_COLUMN,
+            start_node_id="fmt_journal",
+            end_node_id=c.id,
+            properties={},
+        )
         for c in out_columns
     ]
-    val_rule = Node(id="val_balance", labels={NodeLabel.VALIDATION_RULE}, properties={
-        "format_id": FORMAT_ID, "name": "balanced_entry",
-        "expression": "SUM(debit_amount) == SUM(credit_amount)",
-        "scope": "batch",
-    })
+    val_rule = Node(
+        id="val_balance",
+        labels={NodeLabel.VALIDATION_RULE},
+        properties={
+            "format_id": FORMAT_ID,
+            "name": "balanced_entry",
+            "expression": "SUM(debit_amount) == SUM(credit_amount)",
+            "scope": "batch",
+        },
+    )
     val_rels = [
-        Relationship(id="rel_has_val", type=RelationshipType.HAS_VALIDATION,
-                     start_node_id="fmt_journal", end_node_id="val_balance", properties={}),
+        Relationship(
+            id="rel_has_val",
+            type=RelationshipType.HAS_VALIDATION,
+            start_node_id="fmt_journal",
+            end_node_id="val_balance",
+            properties={},
+        ),
     ]
-    entry_struct = Node(id="entry_payroll", labels={NodeLabel.ENTRY_STRUCTURE}, properties={
-        "format_id": FORMAT_ID, "entry_separator": "blank_row",
-        "grouping_column": "journal_number", "date_column": "journal_date",
-    })
+    entry_struct = Node(
+        id="entry_payroll",
+        labels={NodeLabel.ENTRY_STRUCTURE},
+        properties={
+            "format_id": FORMAT_ID,
+            "entry_separator": "blank_row",
+            "grouping_column": "journal_number",
+            "date_column": "journal_date",
+        },
+    )
     entry_struct_rel = Relationship(
-        id="rel_has_entry", type=RelationshipType.HAS_ENTRY_STRUCTURE,
-        start_node_id="fmt_journal", end_node_id="entry_payroll", properties={},
+        id="rel_has_entry",
+        type=RelationshipType.HAS_ENTRY_STRUCTURE,
+        start_node_id="fmt_journal",
+        end_node_id="entry_payroll",
+        properties={},
     )
     nodes = [output_fmt] + out_columns + [val_rule, entry_struct]
     rels = out_col_rels + val_rels + [entry_struct_rel]
@@ -314,6 +644,7 @@ def empty_pattern():
 # TestFindNodesByLabel
 # ============================================================================
 
+
 class TestFindNodesByLabel:
     def test_finds_matching_nodes(self, pipeline):
         columns = _find_nodes_by_label(pipeline, NodeLabel.COLUMN)
@@ -338,6 +669,7 @@ class TestFindNodesByLabel:
 # TestFindSingleNodeByLabel
 # ============================================================================
 
+
 class TestFindSingleNodeByLabel:
     def test_finds_schema(self, pipeline):
         node = _find_single_node_by_label(pipeline, NodeLabel.SOURCE_SCHEMA)
@@ -357,29 +689,38 @@ class TestFindSingleNodeByLabel:
 # TestFindRelatedNodes
 # ============================================================================
 
+
 class TestFindRelatedNodes:
     def test_follows_outgoing_has_column(self, pipeline):
         columns = _find_related_nodes(
-            pipeline, "schema_payroll", RelationshipType.HAS_COLUMN,
+            pipeline,
+            "schema_payroll",
+            RelationshipType.HAS_COLUMN,
         )
         assert len(columns) == 6
 
     def test_follows_outgoing_has_rule(self, pipeline):
         rules = _find_related_nodes(
-            pipeline, "recipe_payroll", RelationshipType.HAS_RULE,
+            pipeline,
+            "recipe_payroll",
+            RelationshipType.HAS_RULE,
         )
         assert len(rules) == 3
 
     def test_returns_empty_for_no_edges(self, pipeline):
         # Schema has no HAS_RULE edges
         result = _find_related_nodes(
-            pipeline, "schema_payroll", RelationshipType.HAS_RULE,
+            pipeline,
+            "schema_payroll",
+            RelationshipType.HAS_RULE,
         )
         assert result == []
 
     def test_returns_empty_for_unknown_node(self, pipeline):
         result = _find_related_nodes(
-            pipeline, "nonexistent_node", RelationshipType.HAS_COLUMN,
+            pipeline,
+            "nonexistent_node",
+            RelationshipType.HAS_COLUMN,
         )
         assert result == []
 
@@ -387,6 +728,7 @@ class TestFindRelatedNodes:
 # ============================================================================
 # TestResolveAccountForSlot
 # ============================================================================
+
 
 class TestResolveAccountForSlot:
     def test_resolves_salary_expense(self, pipeline):
@@ -402,9 +744,16 @@ class TestResolveAccountForSlot:
 
     def test_returns_none_for_unmapped_slot(self, pipeline):
         # Create a pattern with a slot but no MAPPED_TO
-        slot = Node(id="orphan_slot", labels={NodeLabel.ACCOUNT_SLOT}, properties={
-            "recipe_id": "test", "slot_id": "orphan", "role": "primary", "entry_type": "debit",
-        })
+        slot = Node(
+            id="orphan_slot",
+            labels={NodeLabel.ACCOUNT_SLOT},
+            properties={
+                "recipe_id": "test",
+                "slot_id": "orphan",
+                "role": "primary",
+                "entry_type": "debit",
+            },
+        )
         pattern = GraphPattern(nodes=[slot], relationships=[])
         result = _resolve_account_for_slot(pattern, "orphan_slot")
         assert result is None
@@ -417,6 +766,7 @@ class TestResolveAccountForSlot:
 # ============================================================================
 # TestProp
 # ============================================================================
+
 
 class TestProp:
     def test_existing_property(self, pipeline):
@@ -432,6 +782,7 @@ class TestProp:
 # ============================================================================
 # TestSummarizeRecipeLoad
 # ============================================================================
+
 
 class TestSummarizeRecipeLoad:
     def test_has_correct_recipe_id(self, pipeline):
@@ -483,34 +834,58 @@ class TestSummarizeRecipeLoad:
     def test_has_condition_flag(self):
         """Rule with WHEN relationship shows has_condition: True in recipe load summary."""
         schema = Node(
-            id="schema_test", labels={NodeLabel.SOURCE_SCHEMA},
+            id="schema_test",
+            labels={NodeLabel.SOURCE_SCHEMA},
             properties={"recipe_id": RECIPE_ID, "name": "charges", "source_system": "stripe"},
         )
         recipe = Node(
-            id="recipe_test", labels={NodeLabel.ACCOUNTING_RECIPE},
+            id="recipe_test",
+            labels={NodeLabel.ACCOUNTING_RECIPE},
             properties={"recipe_id": RECIPE_ID, "name": "Test Recipe", "source_schema": "charges"},
         )
         rule = Node(
-            id="rule_paid", labels={NodeLabel.MAPPING_RULE},
+            id="rule_paid",
+            labels={NodeLabel.MAPPING_RULE},
             properties={
-                "recipe_id": RECIPE_ID, "rule_name": "paid_entry",
-                "source_measure": "total_amount", "priority": 1,
+                "recipe_id": RECIPE_ID,
+                "rule_name": "paid_entry",
+                "source_measure": "total_amount",
+                "priority": 1,
             },
         )
         cond = Node(
-            id="cond_is_paid", labels={NodeLabel.CONDITION},
+            id="cond_is_paid",
+            labels={NodeLabel.CONDITION},
             properties={
-                "recipe_id": RECIPE_ID, "condition_id": "is_paid",
-                "column": "status", "operator": "equals", "value": "paid",
+                "recipe_id": RECIPE_ID,
+                "condition_id": "is_paid",
+                "column": "status",
+                "operator": "equals",
+                "value": "paid",
             },
         )
         rels = [
-            Relationship(id="r_transforms", type=RelationshipType.TRANSFORMS,
-                         start_node_id="recipe_test", end_node_id="schema_test", properties={}),
-            Relationship(id="r_has_rule", type=RelationshipType.HAS_RULE,
-                         start_node_id="recipe_test", end_node_id="rule_paid", properties={}),
-            Relationship(id="r_when", type=RelationshipType.WHEN,
-                         start_node_id="rule_paid", end_node_id="cond_is_paid", properties={}),
+            Relationship(
+                id="r_transforms",
+                type=RelationshipType.TRANSFORMS,
+                start_node_id="recipe_test",
+                end_node_id="schema_test",
+                properties={},
+            ),
+            Relationship(
+                id="r_has_rule",
+                type=RelationshipType.HAS_RULE,
+                start_node_id="recipe_test",
+                end_node_id="rule_paid",
+                properties={},
+            ),
+            Relationship(
+                id="r_when",
+                type=RelationshipType.WHEN,
+                start_node_id="rule_paid",
+                end_node_id="cond_is_paid",
+                properties={},
+            ),
         ]
         pattern = GraphPattern(nodes=[schema, recipe, rule, cond], relationships=rels)
         result = summarize_recipe_load(pattern, RECIPE_ID)
@@ -528,6 +903,7 @@ class TestSummarizeRecipeLoad:
 # ============================================================================
 # TestSummarizeProcessingInstructions
 # ============================================================================
+
 
 class TestSummarizeProcessingInstructions:
     def test_has_correct_recipe_id(self, pipeline):
@@ -645,18 +1021,34 @@ class TestSummarizeProcessingInstructions:
 
     def test_handles_no_entry_structure(self):
         """Output format without entry structure omits the entry_structure key."""
-        fmt = Node(id="fmt1", labels={NodeLabel.OUTPUT_FORMAT}, properties={
-            "format_id": "test", "name": "test_fmt",
-            "target_system": "test", "file_format": "csv",
-        })
-        ocol = Node(id="oc1", labels={NodeLabel.OUTPUT_COLUMN}, properties={
-            "format_id": "test", "name": "col1", "position": 1, "data_type": "string",
-        })
-        rel = Relationship(id="r1", type=RelationshipType.HAS_COLUMN,
-                           start_node_id="fmt1", end_node_id="oc1", properties={})
+        fmt = Node(
+            id="fmt1",
+            labels={NodeLabel.OUTPUT_FORMAT},
+            properties={
+                "format_id": "test",
+                "name": "test_fmt",
+                "target_system": "test",
+                "file_format": "csv",
+            },
+        )
+        ocol = Node(
+            id="oc1",
+            labels={NodeLabel.OUTPUT_COLUMN},
+            properties={
+                "format_id": "test",
+                "name": "col1",
+                "position": 1,
+                "data_type": "string",
+            },
+        )
+        rel = Relationship(
+            id="r1", type=RelationshipType.HAS_COLUMN, start_node_id="fmt1", end_node_id="oc1", properties={}
+        )
         fmt_pattern = GraphPattern(nodes=[fmt, ocol], relationships=[rel])
         result = summarize_processing_instructions(
-            GraphPattern(nodes=[], relationships=[]), "test", format_pattern=fmt_pattern,
+            GraphPattern(nodes=[], relationships=[]),
+            "test",
+            format_pattern=fmt_pattern,
         )
         output = result["output_format"]
         assert "entry_structure" not in output
@@ -665,62 +1057,136 @@ class TestSummarizeProcessingInstructions:
     def _pipeline_with_condition(self, operator="equals", value="paid"):
         """Build a minimal pipeline containing one rule wired to one Condition via WHEN."""
         schema = Node(
-            id="schema_test", labels={NodeLabel.SOURCE_SCHEMA},
+            id="schema_test",
+            labels={NodeLabel.SOURCE_SCHEMA},
             properties={"recipe_id": RECIPE_ID, "name": "charges", "source_system": "stripe"},
         )
         measure = Node(
-            id="msr_total", labels={NodeLabel.MEASURE},
+            id="msr_total",
+            labels={NodeLabel.MEASURE},
             properties={"recipe_id": RECIPE_ID, "name": "total_amount", "operation": "sum"},
         )
         recipe = Node(
-            id="recipe_test", labels={NodeLabel.ACCOUNTING_RECIPE},
+            id="recipe_test",
+            labels={NodeLabel.ACCOUNTING_RECIPE},
             properties={"recipe_id": RECIPE_ID, "name": "Test Recipe", "source_schema": "charges"},
         )
         rule = Node(
-            id="rule_paid", labels={NodeLabel.MAPPING_RULE},
+            id="rule_paid",
+            labels={NodeLabel.MAPPING_RULE},
             properties={
-                "recipe_id": RECIPE_ID, "rule_name": "paid_entry",
-                "source_measure": "total_amount", "priority": 1,
+                "recipe_id": RECIPE_ID,
+                "rule_name": "paid_entry",
+                "source_measure": "total_amount",
+                "priority": 1,
             },
         )
         cond_props = {
-            "recipe_id": RECIPE_ID, "condition_id": "is_paid",
-            "column": "status", "operator": operator,
+            "recipe_id": RECIPE_ID,
+            "condition_id": "is_paid",
+            "column": "status",
+            "operator": operator,
         }
         if value is not None:
             cond_props["value"] = value
         cond = Node(id="cond_is_paid", labels={NodeLabel.CONDITION}, properties=cond_props)
 
-        slot_dr = Node(id="slot_dr", labels={NodeLabel.ACCOUNT_SLOT}, properties={
-            "recipe_id": RECIPE_ID, "slot_id": "dr", "role": "primary", "entry_type": "debit",
-        })
-        slot_cr = Node(id="slot_cr", labels={NodeLabel.ACCOUNT_SLOT}, properties={
-            "recipe_id": RECIPE_ID, "slot_id": "cr", "role": "offset", "entry_type": "credit",
-        })
-        acct_dr = Node(id="acct_1200", labels={NodeLabel.ACCOUNT}, properties={
-            "code": "1200", "name": "AR", "account_type": "asset", "normal_balance": "debit", "is_active": True,
-        })
-        acct_cr = Node(id="acct_4000", labels={NodeLabel.ACCOUNT}, properties={
-            "code": "4000", "name": "Revenue", "account_type": "revenue", "normal_balance": "credit", "is_active": True,
-        })
+        slot_dr = Node(
+            id="slot_dr",
+            labels={NodeLabel.ACCOUNT_SLOT},
+            properties={
+                "recipe_id": RECIPE_ID,
+                "slot_id": "dr",
+                "role": "primary",
+                "entry_type": "debit",
+            },
+        )
+        slot_cr = Node(
+            id="slot_cr",
+            labels={NodeLabel.ACCOUNT_SLOT},
+            properties={
+                "recipe_id": RECIPE_ID,
+                "slot_id": "cr",
+                "role": "offset",
+                "entry_type": "credit",
+            },
+        )
+        acct_dr = Node(
+            id="acct_1200",
+            labels={NodeLabel.ACCOUNT},
+            properties={
+                "code": "1200",
+                "name": "AR",
+                "account_type": "asset",
+                "normal_balance": "debit",
+                "is_active": True,
+            },
+        )
+        acct_cr = Node(
+            id="acct_4000",
+            labels={NodeLabel.ACCOUNT},
+            properties={
+                "code": "4000",
+                "name": "Revenue",
+                "account_type": "revenue",
+                "normal_balance": "credit",
+                "is_active": True,
+            },
+        )
 
         rels = [
-            Relationship(id="r_transforms", type=RelationshipType.TRANSFORMS,
-                         start_node_id="recipe_test", end_node_id="schema_test", properties={}),
-            Relationship(id="r_has_msr", type=RelationshipType.HAS_MEASURE,
-                         start_node_id="schema_test", end_node_id="msr_total", properties={}),
-            Relationship(id="r_has_rule", type=RelationshipType.HAS_RULE,
-                         start_node_id="recipe_test", end_node_id="rule_paid", properties={}),
-            Relationship(id="r_when", type=RelationshipType.WHEN,
-                         start_node_id="rule_paid", end_node_id="cond_is_paid", properties={}),
-            Relationship(id="r_dr", type=RelationshipType.DEBITS,
-                         start_node_id="rule_paid", end_node_id="slot_dr", properties={}),
-            Relationship(id="r_cr", type=RelationshipType.CREDITS,
-                         start_node_id="rule_paid", end_node_id="slot_cr", properties={}),
-            Relationship(id="r_map_dr", type=RelationshipType.MAPPED_TO,
-                         start_node_id="slot_dr", end_node_id="acct_1200", properties={}),
-            Relationship(id="r_map_cr", type=RelationshipType.MAPPED_TO,
-                         start_node_id="slot_cr", end_node_id="acct_4000", properties={}),
+            Relationship(
+                id="r_transforms",
+                type=RelationshipType.TRANSFORMS,
+                start_node_id="recipe_test",
+                end_node_id="schema_test",
+                properties={},
+            ),
+            Relationship(
+                id="r_has_msr",
+                type=RelationshipType.HAS_MEASURE,
+                start_node_id="schema_test",
+                end_node_id="msr_total",
+                properties={},
+            ),
+            Relationship(
+                id="r_has_rule",
+                type=RelationshipType.HAS_RULE,
+                start_node_id="recipe_test",
+                end_node_id="rule_paid",
+                properties={},
+            ),
+            Relationship(
+                id="r_when",
+                type=RelationshipType.WHEN,
+                start_node_id="rule_paid",
+                end_node_id="cond_is_paid",
+                properties={},
+            ),
+            Relationship(
+                id="r_dr", type=RelationshipType.DEBITS, start_node_id="rule_paid", end_node_id="slot_dr", properties={}
+            ),
+            Relationship(
+                id="r_cr",
+                type=RelationshipType.CREDITS,
+                start_node_id="rule_paid",
+                end_node_id="slot_cr",
+                properties={},
+            ),
+            Relationship(
+                id="r_map_dr",
+                type=RelationshipType.MAPPED_TO,
+                start_node_id="slot_dr",
+                end_node_id="acct_1200",
+                properties={},
+            ),
+            Relationship(
+                id="r_map_cr",
+                type=RelationshipType.MAPPED_TO,
+                start_node_id="slot_cr",
+                end_node_id="acct_4000",
+                properties={},
+            ),
         ]
         nodes = [schema, measure, recipe, rule, cond, slot_dr, slot_cr, acct_dr, acct_cr]
         return GraphPattern(nodes=nodes, relationships=rels)
@@ -767,6 +1233,7 @@ class TestSummarizeProcessingInstructions:
 # TestSummarizeBuildResult
 # ============================================================================
 
+
 class TestSummarizeBuildResult:
     def test_valid_build_with_save_counts(self, pipeline):
         vr = ValidationResult.success(warnings=("Slot orphan has no MAPPED_TO",))
@@ -809,6 +1276,7 @@ class TestSummarizeBuildResult:
 # ============================================================================
 # TestSummarizeValidationResult
 # ============================================================================
+
 
 class TestSummarizeValidationResult:
     def test_valid_entries(self):
@@ -868,6 +1336,7 @@ class TestSummarizeValidationResult:
 # ============================================================================
 # TestSummarizeFormatLoad
 # ============================================================================
+
 
 class TestSummarizeFormatLoad:
     def test_has_format_id(self, format_pattern):

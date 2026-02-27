@@ -12,7 +12,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from domain import NodeLabel, RelationshipType
-from domain.logic import validate_recipe, validate_pipeline_connectivity, validate_output_format, extract_conditions_for_rule
+from domain.logic import (
+    validate_output_format,
+    validate_pipeline_connectivity,
+    validate_recipe,
+)
 from domain.ontology import ValidationResult, validate_node_properties
 from domain.ontology_recipe import merged_ontology
 from mcp_server.summarizers import summarize_processing_instructions
@@ -89,19 +93,16 @@ def validate(recipe_id: str, results_dir: str) -> dict:
     report["checks"]["node_counts"] = {"pass": count_pass, "details": count_details}
 
     # --- Check: Relationship structure ---
-    node_map = {n.id: n for n in pattern.nodes}
     rel_checks = {"pass": True, "details": []}
 
     # Every MappingRule should have DEBITS and CREDITS
     rule_nodes = [n for n in pattern.nodes if NodeLabel.MAPPING_RULE in n.labels]
     for rule in rule_nodes:
         has_debits = any(
-            r.type == RelationshipType.DEBITS and r.start_node_id == rule.id
-            for r in pattern.relationships
+            r.type == RelationshipType.DEBITS and r.start_node_id == rule.id for r in pattern.relationships
         )
         has_credits = any(
-            r.type == RelationshipType.CREDITS and r.start_node_id == rule.id
-            for r in pattern.relationships
+            r.type == RelationshipType.CREDITS and r.start_node_id == rule.id for r in pattern.relationships
         )
         if not has_debits or not has_credits:
             rel_checks["pass"] = False
@@ -113,22 +114,16 @@ def validate(recipe_id: str, results_dir: str) -> dict:
     # Every Measure should have AGGREGATES
     measure_nodes = [n for n in pattern.nodes if NodeLabel.MEASURE in n.labels]
     for m in measure_nodes:
-        has_agg = any(
-            r.type == RelationshipType.AGGREGATES and r.start_node_id == m.id
-            for r in pattern.relationships
-        )
+        has_agg = any(r.type == RelationshipType.AGGREGATES and r.start_node_id == m.id for r in pattern.relationships)
         if not has_agg:
             rel_checks["pass"] = False
-            rel_checks["details"].append(
-                f"Measure '{m.properties.get('name', m.id)}' missing AGGREGATES"
-            )
+            rel_checks["details"].append(f"Measure '{m.properties.get('name', m.id)}' missing AGGREGATES")
 
     # Recipe should have TRANSFORMS
     recipe_nodes = [n for n in pattern.nodes if NodeLabel.ACCOUNTING_RECIPE in n.labels]
     for rn in recipe_nodes:
         has_transforms = any(
-            r.type == RelationshipType.TRANSFORMS and r.start_node_id == rn.id
-            for r in pattern.relationships
+            r.type == RelationshipType.TRANSFORMS and r.start_node_id == rn.id for r in pattern.relationships
         )
         if not has_transforms:
             rel_checks["pass"] = False
@@ -148,8 +143,7 @@ def validate(recipe_id: str, results_dir: str) -> dict:
     )
 
     conditional_rule_exists = any(
-        r.type == RelationshipType.WHEN and r.start_node_id in {n.id for n in rule_nodes}
-        for r in pattern.relationships
+        r.type == RelationshipType.WHEN and r.start_node_id in {n.id for n in rule_nodes} for r in pattern.relationships
     )
 
     roundtrip_ok = False
@@ -245,7 +239,8 @@ def validate(recipe_id: str, results_dir: str) -> dict:
         retry_evidence = (
             "retry" in agent_text_lower
             or "failed validation" in agent_text_lower
-            or "fix" in agent_text_lower and "error" in agent_text_lower
+            or "fix" in agent_text_lower
+            and "error" in agent_text_lower
         )
         if build_calls > 1 or retry_evidence:
             first_attempt = False
@@ -301,9 +296,9 @@ def _write_report(report: dict, results_path: Path):
         json.dump(report, f, indent=2, default=str)
 
     # Print summary
-    print(f"\n{'='*60}")
-    print(f"  Eval 1: Build Pipeline — Validation Report")
-    print(f"{'='*60}")
+    print(f"\n{'=' * 60}")
+    print("  Eval 1: Build Pipeline — Validation Report")
+    print(f"{'=' * 60}")
     print(f"  Recipe ID: {report['recipe_id']}")
     print()
 
@@ -317,12 +312,12 @@ def _write_report(report: dict, results_path: Path):
             print(f"         {check_data['error']}")
 
     print()
-    print(f"  Scores:")
+    print("  Scores:")
     for score_name, score_val in report["scores"].items():
         print(f"    {score_name}: {score_val:.1%}")
-    print(f"  {'─'*40}")
+    print(f"  {'─' * 40}")
     print(f"    TOTAL: {report['total_score']:.1%}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     print(f"\n  Full report: {report_path}")
 

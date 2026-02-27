@@ -1,7 +1,0 @@
-journal_number,journal_date,account_code,debit_amount,credit_amount,memo
-PY-202601-0001,2026-01-31,6100,24500.00,0.00,Salary expense - January 2026
-PY-202601-0001,2026-01-31,2100,0.00,24500.00,Salary expense - January 2026
-PY-202601-0002,2026-01-31,2100,6125.00,0.00,Tax withholding - January 2026
-PY-202601-0002,2026-01-31,2200,0.00,6125.00,Tax withholding - January 2026
-PY-202601-0003,2026-01-31,2100,18375.00,0.00,Net pay disbursement - January 2026
-PY-202601-0003,2026-01-31,1010,0.00,18375.00,Net pay disbursement - January 2026

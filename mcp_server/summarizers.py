@@ -2,30 +2,30 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from domain.types import GraphPattern, Node, NodeLabel, RelationshipType
-from domain.ontology import ValidationResult
 from domain.logic import (
     extract_conditions_for_rule,
-    extract_entry_structure,
     extract_debit_credit_slots,
+    extract_entry_structure,
     extract_measures_for_schema,
     extract_output_columns,
     extract_validation_rules,
 )
-
+from domain.ontology import ValidationResult
+from domain.types import GraphPattern, Node, NodeLabel, RelationshipType
 
 # ============================================================================
 # Graph traversal helpers
 # ============================================================================
 
-def _find_nodes_by_label(pattern: GraphPattern, label: NodeLabel) -> List[Node]:
+
+def _find_nodes_by_label(pattern: GraphPattern, label: NodeLabel) -> list[Node]:
     """Return all nodes in the pattern that carry the given label."""
     return [n for n in pattern.nodes if label in n.labels]
 
 
-def _find_single_node_by_label(pattern: GraphPattern, label: NodeLabel) -> Optional[Node]:
+def _find_single_node_by_label(pattern: GraphPattern, label: NodeLabel) -> Node | None:
     """Return the first node with the given label, or None."""
     for n in pattern.nodes:
         if label in n.labels:
@@ -34,27 +34,25 @@ def _find_single_node_by_label(pattern: GraphPattern, label: NodeLabel) -> Optio
 
 
 def _find_related_nodes(
-    pattern: GraphPattern, start_node_id: str, rel_type: RelationshipType,
-) -> List[Node]:
+    pattern: GraphPattern,
+    start_node_id: str,
+    rel_type: RelationshipType,
+) -> list[Node]:
     """Follow outgoing edges of rel_type from start_node_id, return target nodes."""
     target_ids = {
-        rel.end_node_id
-        for rel in pattern.relationships
-        if rel.type == rel_type and rel.start_node_id == start_node_id
+        rel.end_node_id for rel in pattern.relationships if rel.type == rel_type and rel.start_node_id == start_node_id
     }
     node_map = {n.id: n for n in pattern.nodes}
     return [node_map[nid] for nid in target_ids if nid in node_map]
 
 
 def _resolve_account_for_slot(
-    pattern: GraphPattern, slot_node_id: str,
-) -> Optional[Node]:
+    pattern: GraphPattern,
+    slot_node_id: str,
+) -> Node | None:
     """AccountSlot → MAPPED_TO → Account. Returns the Account node or None."""
     for rel in pattern.relationships:
-        if (
-            rel.type == RelationshipType.MAPPED_TO
-            and rel.start_node_id == slot_node_id
-        ):
+        if rel.type == RelationshipType.MAPPED_TO and rel.start_node_id == slot_node_id:
             for n in pattern.nodes:
                 if n.id == rel.end_node_id:
                     return n
@@ -69,16 +67,18 @@ def _prop(node: Node, key: str, default: Any = None) -> Any:
 def _slot_accounts(
     pattern: GraphPattern,
     slots: tuple[Node, ...],
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Resolve AccountSlot nodes to their mapped Account summaries."""
     accounts = []
     for slot in slots:
         acct = _resolve_account_for_slot(pattern, slot.id)
         if acct:
-            accounts.append({
-                "account_code": _prop(acct, "code"),
-                "account_name": _prop(acct, "name"),
-            })
+            accounts.append(
+                {
+                    "account_code": _prop(acct, "code"),
+                    "account_name": _prop(acct, "name"),
+                }
+            )
     return accounts
 
 
@@ -86,9 +86,10 @@ def _slot_accounts(
 # Top-level summarizers
 # ============================================================================
 
-def summarize_recipe_load(pattern: GraphPattern, recipe_id: str) -> Dict[str, Any]:
+
+def summarize_recipe_load(pattern: GraphPattern, recipe_id: str) -> dict[str, Any]:
     """Summarize a loaded recipe graph for the load_recipe tool response."""
-    result: Dict[str, Any] = {
+    result: dict[str, Any] = {
         "recipe_id": recipe_id,
         "graph_structure": {
             "total_nodes": len(pattern.nodes),
@@ -120,13 +121,15 @@ def summarize_recipe_load(pattern: GraphPattern, recipe_id: str) -> Dict[str, An
     recipe_node = _find_single_node_by_label(pattern, NodeLabel.ACCOUNTING_RECIPE)
     if recipe_node:
         rule_nodes = _find_related_nodes(
-            pattern, recipe_node.id, RelationshipType.HAS_RULE,
+            pattern,
+            recipe_node.id,
+            RelationshipType.HAS_RULE,
         )
         rule_nodes.sort(key=lambda n: _prop(n, "priority", 0))
         result["recipe_name"] = _prop(recipe_node, "name")
         rules_summary = []
         for r in rule_nodes:
-            rule_summary: Dict[str, Any] = {
+            rule_summary: dict[str, Any] = {
                 "rule_name": _prop(r, "rule_name"),
                 "source_measure": _prop(r, "source_measure"),
                 "priority": _prop(r, "priority"),
@@ -149,14 +152,14 @@ def summarize_recipe_load(pattern: GraphPattern, recipe_id: str) -> Dict[str, An
 def summarize_processing_instructions(
     pattern: GraphPattern,
     recipe_id: str,
-    format_pattern: Optional[GraphPattern] = None,
-) -> Dict[str, Any]:
+    format_pattern: GraphPattern | None = None,
+) -> dict[str, Any]:
     """Summarize processing instructions for the get_processing_instructions tool.
 
     If format_pattern is provided, includes output format columns, validation
     rules, and entry structure in the response.
     """
-    result: Dict[str, Any] = {"recipe_id": recipe_id}
+    result: dict[str, Any] = {"recipe_id": recipe_id}
 
     # Measures — with resolved column names via AGGREGATES
     schema_node = _find_single_node_by_label(pattern, NodeLabel.SOURCE_SCHEMA)
@@ -168,15 +171,12 @@ def summarize_processing_instructions(
             # Resolve the column this measure aggregates
             col_name = None
             for rel in pattern.relationships:
-                if (
-                    rel.type == RelationshipType.AGGREGATES
-                    and rel.start_node_id == m.id
-                ):
+                if rel.type == RelationshipType.AGGREGATES and rel.start_node_id == m.id:
                     col_node = node_map.get(rel.end_node_id)
                     if col_node:
                         col_name = _prop(col_node, "name")
                     break
-            measure_entry: Dict[str, Any] = {
+            measure_entry: dict[str, Any] = {
                 "name": _prop(m, "name"),
                 "operation": _prop(m, "operation"),
                 "column": col_name,
@@ -197,7 +197,9 @@ def summarize_processing_instructions(
     recipe_node = _find_single_node_by_label(pattern, NodeLabel.ACCOUNTING_RECIPE)
     if recipe_node:
         rule_nodes = _find_related_nodes(
-            pattern, recipe_node.id, RelationshipType.HAS_RULE,
+            pattern,
+            recipe_node.id,
+            RelationshipType.HAS_RULE,
         )
         rule_nodes.sort(key=lambda n: _prop(n, "priority", 0))
 
@@ -205,7 +207,7 @@ def summarize_processing_instructions(
         for rule in rule_nodes:
             debit_slots, credit_slots = extract_debit_credit_slots(pattern, rule.id)
 
-            rule_entry: Dict[str, Any] = {
+            rule_entry: dict[str, Any] = {
                 "priority": _prop(rule, "priority"),
                 "name": _prop(rule, "rule_name"),
                 "source_measure": _prop(rule, "source_measure"),
@@ -218,7 +220,7 @@ def summarize_processing_instructions(
             if conditions:
                 cond_list = []
                 for cond in conditions:
-                    entry: Dict[str, Any] = {
+                    entry: dict[str, Any] = {
                         "condition_id": _prop(cond, "condition_id"),
                         "column": _prop(cond, "column"),
                         "operator": _prop(cond, "operator"),
@@ -242,11 +244,8 @@ def summarize_processing_instructions(
             val_rules = extract_validation_rules(fmt_pattern, fmt_node.id)
             entry_struct = extract_entry_structure(fmt_pattern, fmt_node.id)
 
-            output_section: Dict[str, Any] = {
-                "columns": [
-                    {"position": _prop(c, "position"), "name": _prop(c, "name")}
-                    for c in out_cols_sorted
-                ],
+            output_section: dict[str, Any] = {
+                "columns": [{"position": _prop(c, "position"), "name": _prop(c, "name")} for c in out_cols_sorted],
                 "validation_rules": [
                     {
                         "name": _prop(v, "name"),
@@ -266,9 +265,9 @@ def summarize_processing_instructions(
     return result
 
 
-def summarize_format_load(pattern: GraphPattern, format_id: str) -> Dict[str, Any]:
+def summarize_format_load(pattern: GraphPattern, format_id: str) -> dict[str, Any]:
     """Summarize a loaded output format graph for the load_format tool response."""
-    result: Dict[str, Any] = {
+    result: dict[str, Any] = {
         "format_id": format_id,
         "graph_structure": {
             "total_nodes": len(pattern.nodes),
@@ -284,10 +283,7 @@ def summarize_format_load(pattern: GraphPattern, format_id: str) -> Dict[str, An
 
         out_cols = extract_output_columns(pattern, fmt_node.id)
         out_cols_sorted = sorted(out_cols, key=lambda n: _prop(n, "position", 0))
-        result["columns"] = [
-            {"name": _prop(c, "name"), "position": _prop(c, "position")}
-            for c in out_cols_sorted
-        ]
+        result["columns"] = [{"name": _prop(c, "name"), "position": _prop(c, "position")} for c in out_cols_sorted]
 
         val_rules = extract_validation_rules(pattern, fmt_node.id)
         result["validation_rules"] = [
@@ -314,14 +310,15 @@ def summarize_format_load(pattern: GraphPattern, format_id: str) -> Dict[str, An
 # Build & Validation result summarizers
 # ============================================================================
 
+
 def summarize_build_result(
     validation_result: ValidationResult,
-    save_counts: List[Dict[str, int]] | None,
+    save_counts: list[dict[str, int]] | None,
     recipe_id: str,
     pattern: GraphPattern | None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Summarize the result of build_and_save_pipeline for the tool response."""
-    result: Dict[str, Any] = {
+    result: dict[str, Any] = {
         "recipe_id": recipe_id,
         "gate1_validation": {
             "is_valid": validation_result.is_valid,
@@ -351,10 +348,10 @@ def summarize_build_result(
 
 
 def summarize_validation_result(
-    entries_results: List[Dict[str, Any]],
-    account_results: List[Dict[str, Any]],
+    entries_results: list[dict[str, Any]],
+    account_results: list[dict[str, Any]],
     merged: ValidationResult,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Summarize the result of validate_entries for the tool response."""
     return {
         "gate2_validation": {

@@ -1,20 +1,10 @@
 # tests/domain/test_ontology.py — Tests for Layer 2 ontology & validation
-import pytest
 from datetime import datetime
 from decimal import Decimal
 from functools import partial
 
-from domain.types import (
-    AccountType,
-    BalanceDirection,
-    GraphPattern,
-    Node,
-    NodeLabel,
-    Relationship,
-    RelationshipType,
-    SemanticType,
-    TransactionLine,
-)
+import pytest
+
 from domain.ontology import (
     ACCOUNT_TYPE_BALANCE_MAP,
     ONTOLOGY,
@@ -34,11 +24,21 @@ from domain.ontology import (
     validate_temporal_ordering,
     validate_transaction_balance,
 )
-
+from domain.types import (
+    AccountType,
+    BalanceDirection,
+    GraphPattern,
+    Node,
+    NodeLabel,
+    Relationship,
+    RelationshipType,
+    TransactionLine,
+)
 
 # ============================================================================
 # Schema type tests
 # ============================================================================
+
 
 class TestSchemaTypes:
     def test_property_schema_is_frozen(self):
@@ -56,7 +56,9 @@ class TestSchemaTypes:
             source_labels=frozenset({NodeLabel.ENTITY}),
             target_labels=frozenset({NodeLabel.ACCOUNT}),
             properties=PropertySchema(
-                required=frozenset(), optional=frozenset(), types={},
+                required=frozenset(),
+                optional=frozenset(),
+                types={},
             ),
         )
         with pytest.raises(AttributeError):
@@ -66,7 +68,9 @@ class TestSchemaTypes:
         es = EntitySchema(
             label=NodeLabel.ACCOUNT,
             properties=PropertySchema(
-                required=frozenset(), optional=frozenset(), types={},
+                required=frozenset(),
+                optional=frozenset(),
+                types={},
             ),
             outgoing_relationships=(),
             incoming_relationships=(),
@@ -78,6 +82,7 @@ class TestSchemaTypes:
 # ============================================================================
 # ValidationResult tests
 # ============================================================================
+
 
 class TestValidationResult:
     def test_success_factory(self):
@@ -140,21 +145,23 @@ class TestValidationResult:
 # Constraint map completeness
 # ============================================================================
 
+
 class TestConstraintMaps:
     def test_all_account_types_in_balance_map(self):
         for at in AccountType:
-            assert at in ACCOUNT_TYPE_BALANCE_MAP, (
-                f"{at.value} missing from ACCOUNT_TYPE_BALANCE_MAP"
-            )
+            assert at in ACCOUNT_TYPE_BALANCE_MAP, f"{at.value} missing from ACCOUNT_TYPE_BALANCE_MAP"
 
     def test_balance_map_has_7_entries(self):
         assert len(ACCOUNT_TYPE_BALANCE_MAP) == 7
 
     def test_core_node_labels_in_ontology(self):
         core_labels = {
-            NodeLabel.ACCOUNT, NodeLabel.TRANSACTION,
-            NodeLabel.TRANSACTION_LINE, NodeLabel.ENTITY,
-            NodeLabel.ANALYTICAL_DIMENSION, NodeLabel.ALLOCATION_RULE,
+            NodeLabel.ACCOUNT,
+            NodeLabel.TRANSACTION,
+            NodeLabel.TRANSACTION_LINE,
+            NodeLabel.ENTITY,
+            NodeLabel.ANALYTICAL_DIMENSION,
+            NodeLabel.ALLOCATION_RULE,
             NodeLabel.DATA_SOURCE,
         }
         for nl in core_labels:
@@ -174,8 +181,10 @@ class TestConstraintMaps:
 
     def test_credit_account_types(self):
         credit_types = {
-            AccountType.LIABILITY, AccountType.EQUITY,
-            AccountType.REVENUE, AccountType.CONTRA_EXPENSE,
+            AccountType.LIABILITY,
+            AccountType.EQUITY,
+            AccountType.REVENUE,
+            AccountType.CONTRA_EXPENSE,
         }
         for at in credit_types:
             assert ACCOUNT_TYPE_BALANCE_MAP[at] == BalanceDirection.CREDIT
@@ -184,6 +193,7 @@ class TestConstraintMaps:
 # ============================================================================
 # Ontology schema detail tests
 # ============================================================================
+
 
 class TestOntologySchemas:
     def test_account_required_properties(self):
@@ -204,19 +214,13 @@ class TestOntologySchemas:
 
     def test_entity_has_outgoing_owns(self):
         schema = ONTOLOGY[NodeLabel.ENTITY]
-        owns_rels = [
-            r for r in schema.outgoing_relationships
-            if r.relationship_type == RelationshipType.OWNS
-        ]
+        owns_rels = [r for r in schema.outgoing_relationships if r.relationship_type == RelationshipType.OWNS]
         assert len(owns_rels) == 1
         assert NodeLabel.ACCOUNT in owns_rels[0].target_labels
 
     def test_transaction_line_has_outgoing_belongs_to(self):
         schema = ONTOLOGY[NodeLabel.TRANSACTION_LINE]
-        bt_rels = [
-            r for r in schema.outgoing_relationships
-            if r.relationship_type == RelationshipType.BELONGS_TO
-        ]
+        bt_rels = [r for r in schema.outgoing_relationships if r.relationship_type == RelationshipType.BELONGS_TO]
         assert len(bt_rels) == 1
         assert NodeLabel.TRANSACTION in bt_rels[0].target_labels
 
@@ -224,6 +228,7 @@ class TestOntologySchemas:
 # ============================================================================
 # validate_node_properties
 # ============================================================================
+
 
 class TestValidateNodeProperties:
     def test_valid_account_node(self):
@@ -300,29 +305,34 @@ class TestValidateNodeProperties:
 # validate_account_balance_direction
 # ============================================================================
 
+
 class TestValidateAccountBalanceDirection:
     def test_asset_debit_valid(self):
         result = validate_account_balance_direction(
-            AccountType.ASSET, BalanceDirection.DEBIT,
+            AccountType.ASSET,
+            BalanceDirection.DEBIT,
         )
         assert result.is_valid is True
 
     def test_revenue_credit_valid(self):
         result = validate_account_balance_direction(
-            AccountType.REVENUE, BalanceDirection.CREDIT,
+            AccountType.REVENUE,
+            BalanceDirection.CREDIT,
         )
         assert result.is_valid is True
 
     def test_asset_credit_invalid(self):
         result = validate_account_balance_direction(
-            AccountType.ASSET, BalanceDirection.CREDIT,
+            AccountType.ASSET,
+            BalanceDirection.CREDIT,
         )
         assert result.is_valid is False
         assert any("requires normal_balance=debit" in e for e in result.errors)
 
     def test_liability_debit_invalid(self):
         result = validate_account_balance_direction(
-            AccountType.LIABILITY, BalanceDirection.DEBIT,
+            AccountType.LIABILITY,
+            BalanceDirection.DEBIT,
         )
         assert result.is_valid is False
 
@@ -336,11 +346,15 @@ class TestValidateAccountBalanceDirection:
 # validate_relationship
 # ============================================================================
 
+
 class TestValidateRelationship:
     def test_valid_belongs_to(self):
         rel = Relationship(
-            id="r1", type=RelationshipType.BELONGS_TO,
-            start_node_id="l1", end_node_id="t1", properties={},
+            id="r1",
+            type=RelationshipType.BELONGS_TO,
+            start_node_id="l1",
+            end_node_id="t1",
+            properties={},
         )
         source = Node(id="l1", labels={NodeLabel.TRANSACTION_LINE}, properties={})
         target = Node(id="t1", labels={NodeLabel.TRANSACTION}, properties={})
@@ -349,8 +363,11 @@ class TestValidateRelationship:
 
     def test_invalid_relationship_labels(self):
         rel = Relationship(
-            id="r1", type=RelationshipType.BELONGS_TO,
-            start_node_id="a1", end_node_id="a2", properties={},
+            id="r1",
+            type=RelationshipType.BELONGS_TO,
+            start_node_id="a1",
+            end_node_id="a2",
+            properties={},
         )
         source = Node(id="a1", labels={NodeLabel.ACCOUNT}, properties={})
         target = Node(id="a2", labels={NodeLabel.ACCOUNT}, properties={})
@@ -360,8 +377,11 @@ class TestValidateRelationship:
 
     def test_valid_owns(self):
         rel = Relationship(
-            id="r1", type=RelationshipType.OWNS,
-            start_node_id="e1", end_node_id="a1", properties={},
+            id="r1",
+            type=RelationshipType.OWNS,
+            start_node_id="e1",
+            end_node_id="a1",
+            properties={},
         )
         source = Node(id="e1", labels={NodeLabel.ENTITY}, properties={})
         target = Node(id="a1", labels={NodeLabel.ACCOUNT}, properties={})
@@ -370,8 +390,11 @@ class TestValidateRelationship:
 
     def test_valid_parent_of_entity(self):
         rel = Relationship(
-            id="r1", type=RelationshipType.PARENT_OF,
-            start_node_id="e1", end_node_id="e2", properties={},
+            id="r1",
+            type=RelationshipType.PARENT_OF,
+            start_node_id="e1",
+            end_node_id="e2",
+            properties={},
         )
         source = Node(id="e1", labels={NodeLabel.ENTITY}, properties={})
         target = Node(id="e2", labels={NodeLabel.ENTITY}, properties={})
@@ -380,8 +403,11 @@ class TestValidateRelationship:
 
     def test_valid_parent_of_dimension(self):
         rel = Relationship(
-            id="r1", type=RelationshipType.PARENT_OF,
-            start_node_id="d1", end_node_id="d2", properties={},
+            id="r1",
+            type=RelationshipType.PARENT_OF,
+            start_node_id="d1",
+            end_node_id="d2",
+            properties={},
         )
         source = Node(id="d1", labels={NodeLabel.ANALYTICAL_DIMENSION}, properties={})
         target = Node(id="d2", labels={NodeLabel.ANALYTICAL_DIMENSION}, properties={})
@@ -392,6 +418,7 @@ class TestValidateRelationship:
 # ============================================================================
 # validate_graph_pattern
 # ============================================================================
+
 
 class TestValidateGraphPattern:
     def test_valid_pattern(self):
@@ -420,8 +447,11 @@ class TestValidateGraphPattern:
             },
         )
         rel = Relationship(
-            id="r1", type=RelationshipType.BELONGS_TO,
-            start_node_id="l1", end_node_id="t1", properties={},
+            id="r1",
+            type=RelationshipType.BELONGS_TO,
+            start_node_id="l1",
+            end_node_id="t1",
+            properties={},
         )
         pattern = GraphPattern(nodes=[line_node, txn_node], relationships=[rel])
         result = validate_graph_pattern(pattern)
@@ -438,8 +468,11 @@ class TestValidateGraphPattern:
             },
         )
         rel = Relationship(
-            id="r1", type=RelationshipType.BELONGS_TO,
-            start_node_id="l1", end_node_id="missing", properties={},
+            id="r1",
+            type=RelationshipType.BELONGS_TO,
+            start_node_id="l1",
+            end_node_id="missing",
+            properties={},
         )
         pattern = GraphPattern(nodes=[node], relationships=[rel])
         result = validate_graph_pattern(pattern)
@@ -458,15 +491,18 @@ class TestValidateGraphPattern:
 # validate_transaction_balance
 # ============================================================================
 
+
 class TestValidateTransactionBalance:
     def test_balanced_transaction(self):
         lines = (
             TransactionLine(
-                line_id="l1", amount=Decimal("100.00"),
+                line_id="l1",
+                amount=Decimal("100.00"),
                 direction=BalanceDirection.DEBIT,
             ),
             TransactionLine(
-                line_id="l2", amount=Decimal("100.00"),
+                line_id="l2",
+                amount=Decimal("100.00"),
                 direction=BalanceDirection.CREDIT,
             ),
         )
@@ -476,11 +512,13 @@ class TestValidateTransactionBalance:
     def test_unbalanced_transaction(self):
         lines = (
             TransactionLine(
-                line_id="l1", amount=Decimal("100.00"),
+                line_id="l1",
+                amount=Decimal("100.00"),
                 direction=BalanceDirection.DEBIT,
             ),
             TransactionLine(
-                line_id="l2", amount=Decimal("50.00"),
+                line_id="l2",
+                amount=Decimal("50.00"),
                 direction=BalanceDirection.CREDIT,
             ),
         )
@@ -491,15 +529,18 @@ class TestValidateTransactionBalance:
     def test_multi_line_balanced(self):
         lines = (
             TransactionLine(
-                line_id="l1", amount=Decimal("100.00"),
+                line_id="l1",
+                amount=Decimal("100.00"),
                 direction=BalanceDirection.DEBIT,
             ),
             TransactionLine(
-                line_id="l2", amount=Decimal("60.00"),
+                line_id="l2",
+                amount=Decimal("60.00"),
                 direction=BalanceDirection.CREDIT,
             ),
             TransactionLine(
-                line_id="l3", amount=Decimal("40.00"),
+                line_id="l3",
+                amount=Decimal("40.00"),
                 direction=BalanceDirection.CREDIT,
             ),
         )
@@ -515,6 +556,7 @@ class TestValidateTransactionBalance:
 # validate_posting_allowed
 # ============================================================================
 
+
 class TestValidatePostingAllowed:
     def test_active_account_allowed(self):
         result = validate_posting_allowed(is_active=True)
@@ -529,6 +571,7 @@ class TestValidatePostingAllowed:
 # ============================================================================
 # Soft warning validators
 # ============================================================================
+
 
 class TestClearingAccountBalance:
     def test_clearing_with_zero_balance_no_warning(self):
@@ -572,7 +615,8 @@ class TestTemporalOrdering:
     def test_same_date_ok(self):
         dt = datetime(2024, 1, 1)
         result = validate_temporal_ordering(
-            transaction_date=dt, posting_date=dt,
+            transaction_date=dt,
+            posting_date=dt,
         )
         assert result.is_valid is True
         assert result.warnings == ()
@@ -581,21 +625,24 @@ class TestTemporalOrdering:
 class TestDimensionHierarchy:
     def test_hierarchical_with_parent_ok(self):
         result = validate_dimension_hierarchy(
-            parent_id="p1", is_hierarchical=True,
+            parent_id="p1",
+            is_hierarchical=True,
         )
         assert result.is_valid is True
         assert result.warnings == ()
 
     def test_non_hierarchical_with_parent_warns(self):
         result = validate_dimension_hierarchy(
-            parent_id="p1", is_hierarchical=False,
+            parent_id="p1",
+            is_hierarchical=False,
         )
         assert result.is_valid is True
         assert any("is_hierarchical is False" in w for w in result.warnings)
 
     def test_no_parent_no_warning(self):
         result = validate_dimension_hierarchy(
-            parent_id=None, is_hierarchical=False,
+            parent_id=None,
+            is_hierarchical=False,
         )
         assert result.is_valid is True
         assert result.warnings == ()
@@ -605,12 +652,15 @@ class TestDimensionHierarchy:
 # compose_validators
 # ============================================================================
 
+
 class TestComposeValidators:
     def test_compose_two_passing_validators(self):
         def v1(x):
             return ValidationResult.success()
+
         def v2(x):
             return ValidationResult.success(("info",))
+
         composed = compose_validators(v1, v2)
         result = composed("anything")
         assert result.is_valid is True
@@ -619,8 +669,10 @@ class TestComposeValidators:
     def test_compose_with_failure(self):
         def v1(x):
             return ValidationResult.success()
+
         def v2(x):
             return ValidationResult.failure(("broken",))
+
         composed = compose_validators(v1, v2)
         result = composed("anything")
         assert result.is_valid is False
@@ -629,10 +681,13 @@ class TestComposeValidators:
     def test_compose_aggregates_all(self):
         def v1(x):
             return ValidationResult.failure(("e1",), ("w1",))
+
         def v2(x):
             return ValidationResult.failure(("e2",))
+
         def v3(x):
             return ValidationResult.success(("w2",))
+
         composed = compose_validators(v1, v2, v3)
         result = composed("anything")
         assert result.is_valid is False

@@ -1,5 +1,4 @@
 # tests/persistence/test_serializers.py — Verify Cypher generation (pure, no driver)
-import pytest
 
 from domain.types import (
     GraphPattern,
@@ -14,41 +13,50 @@ from persistence.serializers import (
     serialize_relationship,
 )
 
-
 # ============================================================================
 # Helpers
 # ============================================================================
 
+
 def _schema_node(node_id="schema1"):
     return Node(
-        id=node_id, labels={NodeLabel.SOURCE_SCHEMA},
+        id=node_id,
+        labels={NodeLabel.SOURCE_SCHEMA},
         properties={"recipe_id": "r1", "name": "Stripe Charges", "source_system": "stripe"},
     )
 
 
 def _column_node(node_id="col1"):
     return Node(
-        id=node_id, labels={NodeLabel.COLUMN},
+        id=node_id,
+        labels={NodeLabel.COLUMN},
         properties={
-            "recipe_id": "r1", "name": "amount", "position": 0,
-            "data_type": "decimal", "role": "amount",
+            "recipe_id": "r1",
+            "name": "amount",
+            "position": 0,
+            "data_type": "decimal",
+            "role": "amount",
         },
     )
 
 
 def _account_node(node_id="acct1"):
     return Node(
-        id=node_id, labels={NodeLabel.ACCOUNT},
+        id=node_id,
+        labels={NodeLabel.ACCOUNT},
         properties={
-            "code": "1200", "name": "AR",
-            "account_type": "asset", "normal_balance": "debit",
+            "code": "1200",
+            "name": "AR",
+            "account_type": "asset",
+            "normal_balance": "debit",
         },
     )
 
 
 def _reference_node(node_id="ref1"):
     return Node(
-        id=node_id, labels={NodeLabel.REFERENCE},
+        id=node_id,
+        labels={NodeLabel.REFERENCE},
         properties={},
         extra_labels=frozenset({"ChartOfAccounts"}),
     )
@@ -56,8 +64,10 @@ def _reference_node(node_id="ref1"):
 
 def _rel(rel_id, rel_type, start, end, props=None):
     return Relationship(
-        id=rel_id, type=rel_type,
-        start_node_id=start, end_node_id=end,
+        id=rel_id,
+        type=rel_type,
+        start_node_id=start,
+        end_node_id=end,
         properties=props or {},
     )
 
@@ -65,6 +75,7 @@ def _rel(rel_id, rel_type, start, end, props=None):
 # ============================================================================
 # serialize_node
 # ============================================================================
+
 
 class TestSerializeNode:
     def test_basic_node_cypher_shape(self):
@@ -111,7 +122,8 @@ class TestSerializeNode:
 
     def test_multi_label_node(self):
         node = Node(
-            id="ref1", labels={NodeLabel.REFERENCE},
+            id="ref1",
+            labels={NodeLabel.REFERENCE},
             properties={},
             extra_labels=frozenset({"ChartOfAccounts"}),
         )
@@ -141,6 +153,7 @@ class TestSerializeNode:
 # serialize_relationship
 # ============================================================================
 
+
 class TestSerializeRelationship:
     def test_basic_relationship_cypher(self):
         schema = _schema_node()
@@ -150,7 +163,10 @@ class TestSerializeRelationship:
         node_index_map = {"schema1": 0, "col1": 1}
 
         cypher, params = serialize_relationship(
-            rel, index=0, node_map=node_map, node_index_map=node_index_map,
+            rel,
+            index=0,
+            node_map=node_map,
+            node_index_map=node_index_map,
         )
 
         assert "MATCH" in cypher
@@ -164,7 +180,9 @@ class TestSerializeRelationship:
         node_map = {"schema1": schema, "col1": col}
 
         cypher, params = serialize_relationship(
-            rel, index=0, node_map=node_map,
+            rel,
+            index=0,
+            node_map=node_map,
         )
 
         assert "s0_recipe_id" in params
@@ -173,12 +191,13 @@ class TestSerializeRelationship:
     def test_relationship_with_properties(self):
         schema = _schema_node()
         col = _column_node()
-        rel = _rel("r1", RelationshipType.HAS_COLUMN, "schema1", "col1",
-                    props={"weight": 1.0})
+        rel = _rel("r1", RelationshipType.HAS_COLUMN, "schema1", "col1", props={"weight": 1.0})
         node_map = {"schema1": schema, "col1": col}
 
         cypher, params = serialize_relationship(
-            rel, index=0, node_map=node_map,
+            rel,
+            index=0,
+            node_map=node_map,
         )
 
         assert "weight" in cypher
@@ -197,6 +216,7 @@ class TestSerializeRelationship:
 # ============================================================================
 # serialize_pattern
 # ============================================================================
+
 
 class TestSerializePattern:
     def test_nodes_before_relationships(self):

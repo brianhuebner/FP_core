@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from neo4j import GraphDatabase
 
@@ -16,16 +16,14 @@ class Neo4jConnection:
 
     def __init__(
         self,
-        uri: Optional[str] = None,
-        user: Optional[str] = None,
-        password: Optional[str] = None,
+        uri: str | None = None,
+        user: str | None = None,
+        password: str | None = None,
     ):
         self.uri = uri or os.environ["NEO4J_URI"]
         self.user = user or os.environ.get("NEO4J_USER", "neo4j")
         self.password = password or os.environ["NEO4J_PASSWORD"]
-        self.driver = GraphDatabase.driver(
-            self.uri, auth=(self.user, self.password)
-        )
+        self.driver = GraphDatabase.driver(self.uri, auth=(self.user, self.password))
 
     def __enter__(self) -> Neo4jConnection:
         return self
@@ -43,17 +41,13 @@ class Neo4jConnection:
             record = result.single()
             return record["test"] == 1
 
-    def run_query(
-        self, query: str, parameters: Optional[Dict[str, Any]] = None
-    ) -> List[Dict[str, Any]]:
+    def run_query(self, query: str, parameters: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         """Execute a read query and return results as a list of dicts."""
         with self.driver.session() as session:
             result = session.run(query, parameters or {})
             return [record.data() for record in result]
 
-    def run_write(
-        self, query: str, parameters: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, int]:
+    def run_write(self, query: str, parameters: dict[str, Any] | None = None) -> dict[str, int]:
         """Execute a write query and return mutation counters."""
         with self.driver.session() as session:
             result = session.run(query, parameters or {})
