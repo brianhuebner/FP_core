@@ -1,6 +1,8 @@
 # persistence/operations.py — High-level save/load/delete operations
 from __future__ import annotations
 
+from typing import Any
+
 from domain.types import GraphPattern
 from persistence.connection import Neo4jConnection
 from persistence.deserializers import deserialize_pattern
@@ -171,3 +173,40 @@ def verify_format(
 ) -> dict[str, int]:
     """Count nodes and relationships for an output format (diagnostic)."""
     return _verify_by_property(conn, "format_id", format_id)
+
+
+def list_available(
+    conn: Neo4jConnection,
+) -> dict[str, list[dict[str, Any]]]:
+    """Query Neo4j for all saved recipes and output formats.
+
+    Returns {"recipes": [...], "formats": [...]} where each entry
+    contains identity and summary fields.
+
+    Always queries Neo4j directly — no caching.
+    """
+    recipe_query = """
+    MATCH (r:AccountingRecipe)
+    OPTIONAL MATCH (r)-[:HAS_RULE]->(rule:MappingRule)
+    RETURN r.recipe_id AS recipe_id,
+           r.name AS name,
+           count(rule) AS rule_count
+    ORDER BY r.recipe_id
+    """
+    recipe_records = conn.run_query(recipe_query, {})
+
+    format_query = """
+    MATCH (f:OutputFormat)
+    OPTIONAL MATCH (f)-[:HAS_COLUMN]->(col:OutputColumn)
+    RETURN f.format_id AS format_id,
+           f.name AS name,
+           f.target_system AS target_system,
+           count(col) AS column_count
+    ORDER BY f.format_id
+    """
+    format_records = conn.run_query(format_query, {})
+
+    return {
+        "recipes": [dict(r) for r in recipe_records],
+        "formats": [dict(r) for r in format_records],
+    }

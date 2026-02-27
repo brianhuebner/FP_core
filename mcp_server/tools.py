@@ -28,6 +28,9 @@ from mcp_server.summarizers import (
     summarize_validation_result,
 )
 from persistence.operations import (
+    list_available as persistence_list_available,
+)
+from persistence.operations import (
     load_format_by_id,
     load_pattern_by_recipe,
     save_pattern,
@@ -63,6 +66,26 @@ def _require_format(format_id: str) -> GraphPattern | None:
     except Exception as e:
         logger.error("Failed to load format %s: %s", format_id, e)
     return None
+
+
+@mcp.tool()
+def list_available() -> str:
+    """List all saved recipes and output formats in the knowledge graph.
+
+    No parameters required. Returns a JSON summary of all available
+    recipes and formats with identity fields and summary counts.
+
+    Use this to discover what's available before calling load_recipe
+    or load_format.
+    """
+    try:
+        conn = get_connection()
+        result = persistence_list_available(conn)
+    except Exception as e:
+        logger.error("Failed to list available: %s", e)
+        return _error(f"Neo4j error: {e}")
+
+    return json.dumps(result, indent=2, default=str)
 
 
 @mcp.tool()

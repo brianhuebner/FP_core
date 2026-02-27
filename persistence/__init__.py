@@ -9,6 +9,7 @@ from persistence.merge_keys import MERGE_KEYS, validate_merge_keys
 from persistence.operations import (
     delete_format_by_id,
     delete_pattern_by_recipe,
+    list_available,
     load_format_by_id,
     load_pattern_by_recipe,
     save_pattern,
@@ -38,6 +39,7 @@ __all__ = [
     # Operations
     "delete_format_by_id",
     "delete_pattern_by_recipe",
+    "list_available",
     "load_format_by_id",
     "load_pattern_by_recipe",
     "save_pattern",
