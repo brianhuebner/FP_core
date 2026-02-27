@@ -2,7 +2,7 @@
 
 > **Status:** Living document
 > **Created:** 2026-02-16
-> **Last updated:** 2026-02-18
+> **Last updated:** 2026-02-26
 
 ---
 
@@ -140,33 +140,43 @@ The recipe is the **standard work instruction**. When it runs through the MCP se
 | MCP resources | L5 | Ontology and constraint schemas available for agent introspection |
 | Measure aggregation wiring | L5 | Per-measure `group_by`, `split_by`, and `split_column` properties wired through builder and summarizer; measures declare their own aggregation level |
 | Condition wiring (WHEN clauses) | L3, L5 | Mapping rules that fire only when conditions are met; `recipe.conditions[]` + `rule.when` in spec; WHEN relationships in graph; conditions emitted in processing instructions |
+| Account metadata in processing instructions | L5 | `get_processing_instructions` includes `account_type` and `normal_balance` on every debit/credit account entry; agents can infer direction without out-of-band knowledge (BUG-002 fix) |
 
 ### Planned — Near Term
 
-| Feature | Layer | What It Enables | Lean Alignment |
-|---------|-------|-----------------|----------------|
-| BUG-001 fix (plural/singular key normalization) | L5 | Builder accepts both `"debit"`/`"debits"` in JSON specs | Defect prevention — eliminate a known error source |
-| Merged relationship constraint validation | L2 | `validate_graph_pattern()` works with mixed core + recipe patterns | Defect prevention — catch invalid relationships at template time |
-| Tier 2 MCP tools (fine-grained write) | L5 | build_schema, build_recipe, validate_template, validate_node, delete_recipe, get_ontology, get_constraints | Reduces motion — agent can inspect and build incrementally instead of assembling full JSON specs |
+| Feature | Layer | What It Enables | Lean Alignment | Product Analysis Ref |
+|---------|-------|-----------------|----------------|---------------------|
+| BUG-001 fix (plural/singular key normalization) | L5 | Builder accepts both `"debit"`/`"debits"` in JSON specs | Defect prevention — eliminate a known error source | — |
+| Compound conditions on rules (BUG-003) | L1-L5 | `rule.when` accepts array of condition_ids (implicit AND); rules can filter on multiple dimensions simultaneously | Defect prevention — recipes are self-contained, no reliance on agent to remember processing-time exclusions | Friction Point 2 |
+| `list_recipes` tool | L5 | Discover all recipe IDs with name and description; agents and users can browse without `run_cypher` | Reduces waiting — table-stakes discoverability | Friction Point 1 |
+| Programmatic tool calling (detail levels + filtering) | L5 | `detail` and `filter` params on tool responses; agents in code execution environments see only what they need | Reduces overprocessing — 80%+ token reduction for programmatic callers | Spec: `programmatic_tool_calling.md` |
+| Merged relationship constraint validation | L2 | `validate_graph_pattern()` works with mixed core + recipe patterns | Defect prevention — catch invalid relationships at template time | — |
+| Patch operations (`add_rule`, `update_rule`, `remove_rule`) | L5 | Surgical edits to recipes without full rebuild; add one rule to a 6-rule recipe without reconstructing the entire spec | Reduces motion — eliminates error-prone full-spec reconstruction | Friction Point 3 |
 
 ### Planned — Medium Term
 
-| Feature | Layer | What It Enables | Lean Alignment |
-|---------|-------|-----------------|----------------|
-| Layer 5 execution engine | L5 | Automated: measure computation, rule filtering, output formatting, Gate 2 enforcement | Eliminates transportation waste — source data to validated output in one automated pass |
-| Privacy-preserving data handling | L5 | PII tokenization for row-level agent access; server-side aggregation so source data stays out of model context by default; de-tokenization on output | Control mechanism — regulatory compliance (SOX, GDPR) by construction |
-| Tier 3 MCP tool (run_cypher) | L5 | Ad-hoc read-only Cypher queries for exploration and debugging | Reduces waiting — accountants and auditors can query the graph directly |
-| Recipe versioning and comparison | L4-L5 | Track changes to recipes over time; diff two versions | Supports DMAIC Control phase — changes are visible, auditable, and reversible |
+| Feature | Layer | What It Enables | Lean Alignment | Product Analysis Ref |
+|---------|-------|-----------------|----------------|---------------------|
+| Layer 5 execution engine | L5 | Automated: measure computation, rule filtering, output formatting, Gate 2 enforcement | Eliminates transportation waste — source data to validated output in one automated pass | — |
+| `infer_schema` from CSV | L5 | Auto-detect column names, data types, and roles from CSV headers; return draft schema for user confirmation | Reduces motion — eliminates manual specification of 48+ fields for a 12-column file | Friction Point 4 |
+| `preview_pipeline` dry-run | L5 | Run recipe logic against sample data WITHOUT saving; return would-be journal entries for review | Defect prevention — builds confidence before committing; catches data-recipe mismatches early | Friction Point 7 |
+| Recipe templates + `clone_recipe` | L5 | Fork existing recipes as starting points; payment processor recipes share 80% structure | Standard work — eliminates cold-start problem for common patterns | Friction Point 5 |
+| `generate_output` end-to-end formatting | L5 | Apply output format rules (sign convention, suppress clearing, column layout) and return import-ready CSV | Eliminates transportation — closes the gap between "entries generated" and "file ready for import" | Friction Point 9 |
+| Privacy-preserving data handling | L5 | PII tokenization for row-level agent access; server-side aggregation so source data stays out of model context by default; de-tokenization on output | Control mechanism — regulatory compliance (SOX, GDPR) by construction | — |
+| Tier 3 MCP tool (run_cypher) | L5 | Ad-hoc read-only Cypher queries for exploration and debugging | Reduces waiting — accountants and auditors can query the graph directly | — |
+| Recipe versioning and comparison | L4-L5 | Track changes to recipes over time; diff two versions | Supports DMAIC Control phase — changes are visible, auditable, and reversible | Friction Point 8 |
 
 ### Planned — Longer Term
 
-| Feature | Layer | What It Enables | Lean Alignment |
-|---------|-------|-----------------|----------------|
-| Process metrics dashboard | L5+ | Aggregate Gate 1/Gate 2 validation results over time — error rates, warning trends, cycle times | DMAIC Measure/Analyze — quantitative SPC for the accounting close |
-| Anomaly detection | L3-L5 | Flag entries that deviate significantly from historical patterns (amount, account, timing) | Variation reduction — statistical control limits on journal entry characteristics |
-| Recipe templates and sharing | L5+ | Reusable recipe patterns (payroll, AP, AR, revenue recognition) that teams can adopt and customize | Standard work — proven patterns reduce setup time and defect rate for common processes |
-| Multi-entity consolidation | L3-L5 | Process data across entities with intercompany elimination rules | Reduces transportation — consolidation is a graph traversal, not a spreadsheet assembly |
-| Automated suggestions | L3-L5 | Recommend account mappings, flag missing accruals, suggest reconciliation matches | Augments professional judgment — system surfaces likely answers, human confirms or overrides |
+| Feature | Layer | What It Enables | Lean Alignment | Product Analysis Ref |
+|---------|-------|-----------------|----------------|---------------------|
+| Process metrics dashboard / confidence dashboard | L5+ | Aggregate Gate 1/Gate 2 validation results over time — error rates, warning trends, cycle times; per-run summary showing balance status, orphan rows, clearing account net | DMAIC Measure/Analyze — quantitative SPC for the accounting close | Wow Feature 3 |
+| Anomaly detection | L3-L5 | Flag entries that deviate significantly from historical patterns (amount, account, timing); "Stripe fees are 4.2% vs usual 2.9%" | Variation reduction — statistical control limits on journal entry characteristics | Wow Feature 4 |
+| Measure-level conditions | L1-L5 | Measures have optional `where` clauses so aggregations are independently correct without relying on rule-level filtering | Defect prevention — measures are self-describing; querying a measure directly gives the right number | Friction Point 6 |
+| Chart of accounts pre-validation | L5 | `validate_against_coa(recipe_id, coa_json)` checks account codes/names against actual QuickBooks chart before generating output | Defect prevention — catches mismatches before they become import failures | Friction Point 10 |
+| Pre-built recipe library | L5+ | Tested recipes for top payment processors (Stripe, Square, PayPal, Shopify, Amazon), payroll providers (ADP, Gusto), and common accrual patterns | Standard work — eliminates cold-start; every new user starts with a working recipe | Wow Feature 5 |
+| Multi-entity consolidation | L3-L5 | Process data across entities with intercompany elimination rules | Reduces transportation — consolidation is a graph traversal, not a spreadsheet assembly | — |
+| Automated suggestions | L3-L5 | Recommend account mappings, flag missing accruals, suggest reconciliation matches | Augments professional judgment — system surfaces likely answers, human confirms or overrides | — |
 
 ---
 
@@ -283,3 +293,27 @@ When something goes wrong, you go to the graph. The provenance trail (CREATED_FR
 | Human intervention rate | % of entries requiring manual correction after automated processing | Decreasing over time |
 | Rework loops | Average Gate 1 submissions before pass (per recipe build) | Approaching 1.0 |
 | Soft warning acknowledgment rate | % of soft warnings reviewed by a human | 100% (warnings exist to be seen) |
+
+---
+
+## Cross-Reference: Product Analysis Friction Points
+
+Mapping from [`docs/fp_core_product_analysis.md`](fp_core_product_analysis.md) friction points and "wow" features to roadmap items. Added 2026-02-26.
+
+| Product Analysis Item | Roadmap Placement | Status | Notes |
+|----------------------|-------------------|--------|-------|
+| Friction 1: `list_recipes` | Near Term | Planned | Highest-impact, lowest-effort discoverability fix |
+| Friction 2: Compound conditions | Near Term (BUG-003) | Planned | `when` as array with implicit AND; see `docs/bug_log.md` |
+| Friction 3: Patch operations | Near Term | Planned | `add_rule`, `update_rule`, `remove_rule` |
+| Friction 4: `infer_schema` from CSV | Medium Term | Planned | Auto-detect columns, types, roles from headers |
+| Friction 5: Recipe templates + cloning | Medium Term | Planned | `clone_recipe` + template library |
+| Friction 6: Measure-level conditions | Longer Term | Planned | Optional `where` clauses on measures |
+| Friction 7: `preview_pipeline` dry-run | Medium Term | Planned | Run recipe against data without saving |
+| Friction 8: Version history + diff | Medium Term | Planned | Already in roadmap as "Recipe versioning and comparison" |
+| Friction 9: `generate_output` formatting | Medium Term | Planned | End-to-end formatted CSV; closes recipe→import gap |
+| Friction 10: Chart of accounts pre-validation | Longer Term | Planned | Validate against actual QBO chart before output |
+| Wow 3: Confidence dashboard | Longer Term | Planned | Merged with "Process metrics dashboard" |
+| Wow 4: Anomaly detection | Longer Term | Planned | Already in roadmap |
+| Wow 5: Recipe marketplace | Longer Term | Planned | Merged with "Pre-built recipe library" |
+| BUG-002: Account metadata in instructions | Delivered | **Done** | `account_type` + `normal_balance` in processing instructions |
+| Programmatic tool calling | Near Term | Spec written | `specs/features/programmatic_tool_calling.md` |

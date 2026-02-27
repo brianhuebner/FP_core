@@ -945,6 +945,29 @@ class TestSummarizeProcessingInstructions:
         assert len(gross_rule["credits"]) == 1
         assert gross_rule["credits"][0]["account_code"] == "2100"
 
+    def test_debit_account_metadata(self, pipeline):
+        result = summarize_processing_instructions(pipeline, RECIPE_ID)
+        gross_rule = result["rules"][0]
+        debit = gross_rule["debits"][0]
+        assert debit["account_type"] == "expense"
+        assert debit["normal_balance"] == "debit"
+
+    def test_credit_account_metadata(self, pipeline):
+        result = summarize_processing_instructions(pipeline, RECIPE_ID)
+        gross_rule = result["rules"][0]
+        credit = gross_rule["credits"][0]
+        assert credit["account_type"] == "liability"
+        assert credit["normal_balance"] == "credit"
+
+    def test_all_accounts_have_metadata(self, pipeline):
+        result = summarize_processing_instructions(pipeline, RECIPE_ID)
+        for rule in result["rules"]:
+            for acct in rule["debits"] + rule["credits"]:
+                assert "account_type" in acct
+                assert "normal_balance" in acct
+                assert acct["account_type"] is not None
+                assert acct["normal_balance"] is not None
+
     def test_rules_have_memo_templates(self, pipeline):
         result = summarize_processing_instructions(pipeline, RECIPE_ID)
         for rule in result["rules"]:

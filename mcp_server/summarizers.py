@@ -77,6 +77,8 @@ def _slot_accounts(
                 {
                     "account_code": _prop(acct, "code"),
                     "account_name": _prop(acct, "name"),
+                    "account_type": _prop(acct, "account_type"),
+                    "normal_balance": _prop(acct, "normal_balance"),
                 }
             )
     return accounts
