@@ -16,5 +16,8 @@ venv/
 # Claude Code
 .claude/worktrees/
 
+# Eval run outputs
+evals/results/
+
 # Docs with secrets
 docs/environment_and_best_practices.md
