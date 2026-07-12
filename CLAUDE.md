@@ -146,7 +146,7 @@ These are test-asserted — do not change without updating both code and tests:
 | `ACCOUNT_TYPE_BALANCE_MAP` | 7 | Account type → normal balance direction |
 | `MERGE_KEYS`                       | 19  | One per NodeLabel                              |
 | MCP Tools                          | 7   | list_available, load_recipe, load_format, get_processing_instructions, build_and_save_pipeline, build_output, validate_entries |
-| Total tests                        | 420 | Across 5 domain + 4 MCP + persistence test files |
+| Total tests                        | 423 | Across 5 domain + 5 MCP + persistence test files |
 
 ## Known Constraints
 
