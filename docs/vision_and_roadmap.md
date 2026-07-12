@@ -141,12 +141,12 @@ The recipe is the **standard work instruction**. When it runs through the MCP se
 | Measure aggregation wiring | L5 | Per-measure `group_by`, `split_by`, and `split_column` properties wired through builder and summarizer; measures declare their own aggregation level |
 | Condition wiring (WHEN clauses) | L3, L5 | Mapping rules that fire only when conditions are met; `recipe.conditions[]` + `rule.when` in spec; WHEN relationships in graph; conditions emitted in processing instructions |
 | Account metadata in processing instructions | L5 | `get_processing_instructions` includes `account_type` and `normal_balance` on every debit/credit account entry; agents can infer direction without out-of-band knowledge (BUG-002 fix) |
+| Plural/singular key normalization | L5 | Builder accepts both `"debit"`/`"debits"` in JSON specs; raises `KeyError` if neither form is present (BUG-001 fix) |
 
 ### Planned — Near Term
 
 | Feature | Layer | What It Enables | Lean Alignment | Product Analysis Ref |
 |---------|-------|-----------------|----------------|---------------------|
-| BUG-001 fix (plural/singular key normalization) | L5 | Builder accepts both `"debit"`/`"debits"` in JSON specs | Defect prevention — eliminate a known error source | — |
 | Compound conditions on rules (BUG-003) | L1-L5 | `rule.when` accepts array of condition_ids (implicit AND); rules can filter on multiple dimensions simultaneously | Defect prevention — recipes are self-contained, no reliance on agent to remember processing-time exclusions | Friction Point 2 |
 | `list_recipes` tool | L5 | Discover all recipe IDs with name and description; agents and users can browse without `run_cypher` | Reduces waiting — table-stakes discoverability | Friction Point 1 |
 | Programmatic tool calling (detail levels + filtering) | L5 | `detail` and `filter` params on tool responses; agents in code execution environments see only what they need | Reduces overprocessing — 80%+ token reduction for programmatic callers | Spec: `programmatic_tool_calling.md` |
@@ -315,5 +315,6 @@ Mapping from [`docs/fp_core_product_analysis.md`](fp_core_product_analysis.md) f
 | Wow 3: Confidence dashboard | Longer Term | Planned | Merged with "Process metrics dashboard" |
 | Wow 4: Anomaly detection | Longer Term | Planned | Already in roadmap |
 | Wow 5: Recipe marketplace | Longer Term | Planned | Merged with "Pre-built recipe library" |
+| BUG-001: Plural/singular key normalization | Delivered | **Done** | Builder normalizes `debits`→`debit`, fails loudly if missing |
 | BUG-002: Account metadata in instructions | Delivered | **Done** | `account_type` + `normal_balance` in processing instructions |
 | Programmatic tool calling | Near Term | Spec written | `specs/features/programmatic_tool_calling.md` |

@@ -21,7 +21,7 @@ Tracking issues discovered during real agent sessions using the FP_core MCP serv
 2. **Document the spec** — add a JSON schema or example to the `build_and_save_pipeline` tool description so the agent sees the exact keys
 3. **Fail loudly** — if a rule spec has no `debit`/`credit` keys, return a warning or error instead of silently skipping
 
-**Status:** Open — workaround is to use singular keys. Underlying issue (silent skip + no spec docs) remains.
+**Status:** Fixed — builder normalizes plural keys to singular (lines 207-217) and raises `KeyError` if neither form is present (lines 257-263). Tests in `TestBuildRecipeNodesNormalization`.
 
 ---
 
