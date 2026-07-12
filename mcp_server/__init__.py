@@ -32,8 +32,9 @@ _port = int(os.environ.get("MCP_PORT") or os.environ.get("PORT") or "8000")
 # Auth0 OAuth configuration (only active for HTTP transport)
 _auth0_domain = os.environ.get("AUTH0_DOMAIN")
 _auth0_audience = os.environ.get("AUTH0_AUDIENCE")
+_is_http = _transport in ("streamable-http", "http")
 
-if _transport in ("streamable-http", "http") and _auth0_domain and _auth0_audience:
+if _is_http and _auth0_domain and _auth0_audience:
     from mcp.server.auth.settings import AuthSettings
 
     from mcp_server.auth import Auth0TokenVerifier
@@ -44,7 +45,24 @@ if _transport in ("streamable-http", "http") and _auth0_domain and _auth0_audien
         issuer_url=f"https://{_auth0_domain}",
         resource_server_url=_resource_url,
     )
+elif _is_http:
+    # Fail closed: HTTP transport binds a public interface, so refuse to start
+    # unauthenticated unless the operator explicitly opts in (local dev only).
+    # A missing/typo'd AUTH0_* var must never silently expose the graph.
+    if os.environ.get("MCP_ALLOW_UNAUTHENTICATED", "").lower() != "true":
+        raise RuntimeError(
+            "HTTP transport requires AUTH0_DOMAIN and AUTH0_AUDIENCE to be set "
+            "(OAuth bearer-token auth). Refusing to start an unauthenticated "
+            "public server. Set both variables, or set "
+            "MCP_ALLOW_UNAUTHENTICATED=true to override for local development."
+        )
+    logger.warning(
+        "HTTP transport running WITHOUT authentication (MCP_ALLOW_UNAUTHENTICATED=true). Do not use this in production."
+    )
+    _token_verifier = None
+    _auth_settings = None
 else:
+    # STDIO transport: local process, auth env vars are intentionally ignored.
     _token_verifier = None
     _auth_settings = None
 

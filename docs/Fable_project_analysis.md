@@ -47,6 +47,28 @@ FP_core targets the "last mile" of bookkeeping: small-business workflows too odd
 - **Fix:** `tenant_id` property on every node (derived from Auth0 subject), scoped into every L4 query and MERGE key; server-side cache keyed by (tenant, recipe). Spec exists: `specs/features/multi_tenant_auth.md`.
 - **Priority:** P1. Hard prerequisite for multiple testers and for FORK-3 (evals on user data).
 
+### Security review findings (2026-07-12)
+
+DEF-4 through DEF-6 come from a security review of the Railway/Auth0 deployment. Two higher-severity findings from that same review are already remediated: Cypher injection via Reference labels/property keys (fixed with an identifier allowlist at the serialization boundary in `persistence/serializers.py`), and fail-open auth on misconfiguration (HTTP transport now refuses to start without `AUTH0_DOMAIN`/`AUTH0_AUDIENCE` unless `MCP_ALLOW_UNAUTHENTICATED=true`). The three below remain open.
+
+### DEF-4: No scope / authorization enforcement on tokens
+`mcp_server/auth.py:31` parses the token's `scope` claim into `AccessToken.scopes`, but nothing downstream enforces it — every tool handler in `mcp_server/tools.py` is reachable by *any* token Auth0 issues for the audience, including the write/destructive paths (`build_and_save_pipeline`, `build_output`). If the Auth0 tenant permits broad sign-up or machine-to-machine grants, a valid token is effectively an admin token. This compounds DEF-3: no tenancy *and* no scope check means one credential reaches the whole shared graph.
+
+- **Fix:** define required scopes (e.g. `recipe:read`, `recipe:write`) and enforce them in the tool layer — reject calls whose `AccessToken.scopes` lack the scope the tool requires. Pairs naturally with the `tenant_id` work in DEF-3.
+- **Priority:** P1. Should land with tenancy (DEF-3), before multiple testers share the deployment.
+
+### DEF-5: Overly broad exception swallow in token verification
+`mcp_server/auth.py:34` — `except (jwt.PyJWTError, Exception)` catches everything and returns `None`. It fails closed (denies access, which is correct), but it also collapses operational failures — JWKS fetch errors, network timeouts, key-rotation issues — into an indistinguishable "invalid token." An auth outage would look identical to ordinary bad credentials, making it very hard to diagnose in production.
+
+- **Fix:** catch `jwt.PyJWTError` specifically for the deny path; let unexpected exceptions propagate (or log them at `error` with a distinct message) so infrastructure failures are observable in telemetry. Ties into the FORK-3.3 telemetry work.
+- **Priority:** P2. Not exploitable; operability and incident-response risk.
+
+### DEF-6: Raw exception text leaked to clients
+`mcp_server/tools.py` — every Neo4j failure path returns the raw exception string to the caller, e.g. `_error(f"Neo4j error: {e}")` (lines 86, 106, 138, 306) and `_error(f"Neo4j save error: {e}")` (383). Driver exceptions can include the connection URI, host, and internal query fragments — information disclosure to any authenticated client, and more of a concern once the deployment is multi-tenant.
+
+- **Fix:** return a generic client-facing message ("internal error processing request") and log the exception detail server-side only. Fold into the telemetry/logging contract in `mcp_server/CLAUDE.md`.
+- **Priority:** P2. Information disclosure; low severity today, rises with tenancy.
+
 ---
 
 ## 3. Architectural Decision Records

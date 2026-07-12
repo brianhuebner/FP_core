@@ -1,5 +1,7 @@
 # tests/persistence/test_serializers.py — Verify Cypher generation (pure, no driver)
 
+import pytest
+
 from domain.types import (
     GraphPattern,
     Node,
@@ -281,3 +283,50 @@ class TestSerializePattern:
         # All rel statements should start with MATCH
         for i in range(3, 5):
             assert statements[i][0].startswith("MATCH")
+
+
+# ============================================================================
+# Cypher injection guard — labels and property keys cannot be parameterized,
+# so any caller-supplied value on those positions must be rejected.
+# ============================================================================
+
+
+class TestIdentifierInjectionGuard:
+    def test_safe_reference_label_serializes(self):
+        node = _reference_node()
+        cypher, _ = serialize_node(node, index=0)
+        assert ":Reference:ChartOfAccounts" in cypher
+
+    def test_malicious_extra_label_rejected(self):
+        node = Node(
+            id="ref1",
+            labels={NodeLabel.REFERENCE},
+            properties={},
+            extra_labels=frozenset({"Foo`) DETACH DELETE n //"}),
+        )
+        with pytest.raises(ValueError, match="Unsafe label"):
+            serialize_node(node, index=0)
+
+    def test_malicious_node_property_key_rejected(self):
+        node = Node(
+            id="ref1",
+            labels={NodeLabel.REFERENCE},
+            properties={"x = 1 SET n.hacked": "value"},
+        )
+        with pytest.raises(ValueError, match="Unsafe property key"):
+            serialize_node(node, index=0)
+
+    def test_malicious_relationship_property_key_rejected(self):
+        schema = _schema_node()
+        col = _column_node()
+        rel = _rel(
+            "r1",
+            RelationshipType.HAS_COLUMN,
+            schema.id,
+            col.id,
+            props={"y} ]->() DETACH DELETE n //": 1},
+        )
+        node_map = {schema.id: schema, col.id: col}
+        node_index_map = {schema.id: 0, col.id: 1}
+        with pytest.raises(ValueError, match="Unsafe property key"):
+            serialize_relationship(rel, 0, node_map, node_index_map)

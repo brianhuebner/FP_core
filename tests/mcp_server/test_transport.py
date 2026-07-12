@@ -24,7 +24,7 @@ class TestTransportSelection:
 
     def test_http_transport_selection(self):
         """MCP_TRANSPORT=streamable-http → main() calls mcp.run(transport='streamable-http')."""
-        env = {"MCP_TRANSPORT": "streamable-http"}
+        env = {"MCP_TRANSPORT": "streamable-http", "MCP_ALLOW_UNAUTHENTICATED": "true"}
         with patch.dict("os.environ", env, clear=False):
             import importlib
 
@@ -38,7 +38,7 @@ class TestTransportSelection:
 
     def test_http_alias_transport_selection(self):
         """MCP_TRANSPORT=http → same as streamable-http."""
-        env = {"MCP_TRANSPORT": "http"}
+        env = {"MCP_TRANSPORT": "http", "MCP_ALLOW_UNAUTHENTICATED": "true"}
         with patch.dict("os.environ", env, clear=False):
             import importlib
 
@@ -56,6 +56,7 @@ class TestTransportSelection:
             "MCP_TRANSPORT": "streamable-http",
             "MCP_HOST": "192.168.1.1",
             "MCP_PORT": "9999",
+            "MCP_ALLOW_UNAUTHENTICATED": "true",
         }
         with patch.dict("os.environ", env, clear=False):
             import importlib
@@ -71,7 +72,7 @@ class TestTransportSelection:
 
     def test_default_host_and_port(self):
         """Defaults to 0.0.0.0:8000 when env vars not set."""
-        env = {"MCP_TRANSPORT": "streamable-http"}
+        env = {"MCP_TRANSPORT": "streamable-http", "MCP_ALLOW_UNAUTHENTICATED": "true"}
         # Remove MCP_HOST, MCP_PORT, PORT if present
         with patch.dict("os.environ", env, clear=False):
             import os
@@ -91,7 +92,11 @@ class TestTransportSelection:
 
     def test_railway_port_fallback(self):
         """PORT env var (Railway-injected) is used when MCP_PORT is not set."""
-        env = {"MCP_TRANSPORT": "streamable-http", "PORT": "3000"}
+        env = {
+            "MCP_TRANSPORT": "streamable-http",
+            "PORT": "3000",
+            "MCP_ALLOW_UNAUTHENTICATED": "true",
+        }
         with patch.dict("os.environ", env, clear=False):
             import os
 
@@ -128,9 +133,31 @@ class TestOAuthWiring:
             assert mcp_server.mcp._token_verifier is not None
             assert mcp_server.mcp.settings.auth is not None
 
-    def test_no_auth0_env_vars_no_oauth(self):
-        """No AUTH0 vars → FastMCP has no token_verifier."""
+    def test_http_without_auth0_fails_closed(self):
+        """HTTP transport + no AUTH0 vars + no override → refuse to start."""
+        import os
+
+        import pytest
+
         env = {"MCP_TRANSPORT": "streamable-http"}
+        with patch.dict("os.environ", env, clear=False):
+            os.environ.pop("AUTH0_DOMAIN", None)
+            os.environ.pop("AUTH0_AUDIENCE", None)
+            os.environ.pop("MCP_ALLOW_UNAUTHENTICATED", None)
+
+            import importlib
+
+            import mcp_server
+
+            with pytest.raises(RuntimeError, match="requires AUTH0_DOMAIN"):
+                importlib.reload(mcp_server)
+
+    def test_http_unauthenticated_override_allows_no_oauth(self):
+        """HTTP + no AUTH0 vars + MCP_ALLOW_UNAUTHENTICATED=true → starts without auth."""
+        env = {
+            "MCP_TRANSPORT": "streamable-http",
+            "MCP_ALLOW_UNAUTHENTICATED": "true",
+        }
         with patch.dict("os.environ", env, clear=False):
             import os
 

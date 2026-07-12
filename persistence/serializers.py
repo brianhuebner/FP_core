@@ -1,12 +1,33 @@
 # persistence/serializers.py — Pure functions: GraphPattern -> (cypher, params) tuples
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from domain.types import GraphPattern, Node, NodeLabel, Relationship
 from persistence.merge_keys import MERGE_KEYS
 
 NODE_ID_KEY = "_node_id"
+
+# Neo4j cannot parameterize labels or property keys — they are interpolated as
+# raw Cypher text. Any label/key that reaches serialization must be a plain
+# identifier so a caller-supplied value (e.g. a Reference node's type or
+# property keys, which the ontology treats as opaque) cannot inject Cypher.
+_SAFE_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _safe_identifier(name: str, kind: str) -> str:
+    """Return name unchanged if it is a plain identifier; else raise.
+
+    Guards every label and property key that is concatenated into a Cypher
+    string. Values remain fully parameterized and are never checked here.
+    """
+    if not isinstance(name, str) or not _SAFE_IDENTIFIER.match(name):
+        raise ValueError(
+            f"Unsafe {kind} {name!r}: must match [A-Za-z_][A-Za-z0-9_]* "
+            f"(labels and property keys cannot be parameterized in Cypher)."
+        )
+    return name
 
 
 def _resolve_merge_keys(
@@ -24,7 +45,7 @@ def _label_string(node: Node) -> str:
     """Build Neo4j label string like ':SourceSchema:Column'."""
     labels = [label.value for label in sorted(node.labels, key=lambda l: l.value)]
     labels.extend(sorted(node.extra_labels))
-    return ":" + ":".join(labels)
+    return ":" + ":".join(_safe_identifier(label, "label") for label in labels)
 
 
 def serialize_node(
@@ -66,6 +87,7 @@ def serialize_node(
     for key, value in node.properties.items():
         if key in merge_key_names:
             continue  # already in MERGE clause
+        _safe_identifier(key, "property key")
         param_name = f"{var}_{key}"
         set_parts.append(f"{var}.{key} = ${param_name}")
         params[param_name] = value
@@ -141,6 +163,7 @@ def serialize_relationship(
     if rel.properties:
         prop_parts = []
         for key, value in rel.properties.items():
+            _safe_identifier(key, "property key")
             param_name = f"{rel_var}_{key}"
             prop_parts.append(f"{key}: ${param_name}")
             params[param_name] = value

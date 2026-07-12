@@ -158,6 +158,9 @@ Transport is selected via environment variables. Default is STDIO (backward comp
 | `AUTH0_DOMAIN` | *(none)* | Auth0 tenant domain, e.g. `your-tenant.us.auth0.com` |
 | `AUTH0_AUDIENCE` | *(none)* | Auth0 API identifier / audience claim |
 | `MCP_RESOURCE_URL` | *(derived)* | Public URL of MCP server for RFC 9728 metadata |
+| `MCP_ALLOW_UNAUTHENTICATED` | *(none)* | Set to `true` to allow HTTP transport without OAuth (local dev only) |
+
+**Fail-closed auth:** HTTP transport refuses to start unless both `AUTH0_DOMAIN` and `AUTH0_AUDIENCE` are set — a missing or mistyped var raises `RuntimeError` rather than silently exposing an unauthenticated public server. Set `MCP_ALLOW_UNAUTHENTICATED=true` to override for local development only. STDIO transport is unaffected (local process, auth vars ignored).
 
 ### OAuth Authentication (`auth.py`)
 
