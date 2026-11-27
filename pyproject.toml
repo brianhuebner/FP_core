@@ -1,10 +1,14 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "fp-core"
 version = "0.1.0"
 description = "Accounting knowledge graph built on a domain-driven ontology"
 requires-python = ">=3.12"
 dependencies = [
-    "mcp[cli]>=1.0",
+    "mcp[cli]>=1.30,<2",
     "neo4j>=5.0",
     "python-dotenv",
     "uvicorn",
@@ -13,6 +17,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest", "ruff"]
+
+[tool.setuptools.packages.find]
+include = ["domain*", "persistence*", "mcp_server*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

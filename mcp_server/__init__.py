@@ -44,6 +44,10 @@ if _is_http and _auth0_domain and _auth0_audience:
     _auth_settings = AuthSettings(
         issuer_url=f"https://{_auth0_domain}",
         resource_server_url=_resource_url,
+        # Auth0TokenVerifier already validates the token's audience (jwt.decode(audience=...)),
+        # so the SDK's separate resource check is explicitly off rather than left to a default
+        # that changes in MCP 3.0.
+        validate_token_resource=False,
     )
 elif _is_http:
     # Fail closed: HTTP transport binds a public interface, so refuse to start
