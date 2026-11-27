@@ -7,6 +7,7 @@ name = "fp-core"
 version = "0.1.0"
 description = "Accounting knowledge graph built on a domain-driven ontology"
 requires-python = ">=3.12"
+license = { text = "MIT" }
 dependencies = [
     "mcp[cli]>=1.30,<2",
     "neo4j>=5.0",

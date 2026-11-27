@@ -129,6 +129,7 @@ FP_core/
   railway.toml       Railway deployment config
   requirements.txt   runtime dependencies (used by the Railway build)
   pyproject.toml     package metadata, dependencies, ruff + pytest config
+  LICENSE            MIT
   CLAUDE.md          Claude Code development guide (file map, canonical counts, extension patterns)
 ```
 
@@ -147,3 +148,7 @@ Each package has its own `CLAUDE.md` with layer-specific architecture and data c
 - `docs/user_flow.md`: end-to-end user flow
 - `docs/vision_and_roadmap.md`: project vision and roadmap
 - `docs/fp_core_skill.md`: guided workflows for AI agents using the MCP tools
+
+## License
+
+[MIT](LICENSE) © 2026 Brian Huebner
