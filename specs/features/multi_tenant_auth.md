@@ -356,14 +356,14 @@ JSON response (to authenticated client)
 # Admin creates a new tenant (CLI tool, not MCP endpoint)
 $ python -m mcp_server.admin create-tenant --id acme_corp --name "Acme Corporation"
 Tenant created: acme_corp
-API key: fpk_a1b2c3d4e5f6...  (store this — it cannot be retrieved later)
+API key: fpk_xxxxxxxxxxxx...  (store this — it cannot be retrieved later)
 ```
 
 ### Happy path: authenticated MCP tool call
 
 ```
 POST /mcp HTTP/1.1
-Authorization: Bearer fpk_a1b2c3d4e5f6...
+Authorization: Bearer fpk_xxxxxxxxxxxx...
 Content-Type: application/json
 
 {

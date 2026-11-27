@@ -63,7 +63,7 @@ MCP_TRANSPORT=streamable-http MCP_PORT=8000 python -m mcp_server
 MCP_TRANSPORT=streamable-http AUTH0_DOMAIN=your-tenant.us.auth0.com AUTH0_AUDIENCE=https://your-app.example.com/mcp python -m mcp_server
 ```
 
-Python 3.12, no build step. Linter/formatter: ruff (configured in `pyproject.toml`). Dependencies beyond stdlib: neo4j>=5.0, mcp[cli], python-dotenv, uvicorn, PyJWT[crypto]. Dev deps: pytest, ruff. See `pyproject.toml`.
+Python 3.12. Install with `pip install -e ".[dev]"`. MCP SDK pinned `<2` in both `pyproject.toml` and `requirements.txt` (2.x renamed FastMCP). Linter/formatter: ruff (configured in `pyproject.toml`). Dependencies beyond stdlib: neo4j>=5.0, mcp[cli], python-dotenv, uvicorn, PyJWT[crypto]. Dev deps: pytest, ruff. See `pyproject.toml`.
 
 ## File Map
 
